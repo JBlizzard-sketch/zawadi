@@ -152,9 +152,7 @@ router.get("/dashboard/alerts", async (req, res) => {
       db.select({
         count: sql<number>`count(*)`,
         total: sql<number>`coalesce(sum(total_amount::numeric), 0)`,
-      }).from(invoicesTable).where(
-        and(eq(invoicesTable.status, "sent"), sql`due_date < ${now}`)
-      ),
+      }).from(invoicesTable).where(eq(invoicesTable.status, "overdue")),
       db.select({ count: sql<number>`count(*)` }).from(quotesTable).where(
         and(
           sql`status in ('draft','sent')`,
@@ -207,6 +205,60 @@ router.get("/reports/top-clients", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch top clients" });
+  }
+});
+
+router.get("/reports/supplier-esg", async (req, res) => {
+  try {
+    const suppliers = await db
+      .select({
+        id: suppliersTable.id,
+        name: suppliersTable.name,
+        county: suppliersTable.county,
+        womenLed: suppliersTable.womenLed,
+        artisanCount: suppliersTable.artisanCount,
+        certifications: suppliersTable.certifications,
+        isVerified: suppliersTable.isVerified,
+      })
+      .from(suppliersTable)
+      .where(eq(suppliersTable.isVerified, true));
+
+    const totalArtisans = suppliers.reduce((s, r) => s + (Number(r.artisanCount) || 0), 0);
+    const womenLedCount = suppliers.filter((r) => r.womenLed).length;
+
+    const byCounty: Record<string, { suppliers: number; artisans: number }> = {};
+    for (const s of suppliers) {
+      const c = s.county ?? "Unknown";
+      if (!byCounty[c]) byCounty[c] = { suppliers: 0, artisans: 0 };
+      byCounty[c].suppliers += 1;
+      byCounty[c].artisans += Number(s.artisanCount) || 0;
+    }
+
+    const certCounts: Record<string, number> = {};
+    for (const s of suppliers) {
+      for (const cert of (s.certifications as string[]) ?? []) {
+        certCounts[cert] = (certCounts[cert] ?? 0) + 1;
+      }
+    }
+    const topCerts = Object.entries(certCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name, count]) => ({ name, count }));
+
+    res.json({
+      total_verified: suppliers.length,
+      total_artisans: totalArtisans,
+      women_led_count: womenLedCount,
+      women_led_pct: suppliers.length > 0 ? Math.round((womenLedCount / suppliers.length) * 100) : 0,
+      counties_covered: Object.keys(byCounty).length,
+      by_county: Object.entries(byCounty)
+        .sort((a, b) => b[1].artisans - a[1].artisans)
+        .map(([county, data]) => ({ county, ...data })),
+      top_certifications: topCerts,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch supplier ESG data" });
   }
 });
 

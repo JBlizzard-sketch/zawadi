@@ -72,7 +72,7 @@ export default function Dashboard() {
             <div className="flex flex-wrap gap-2 flex-1">
               {alerts.overdue_invoices?.count > 0 && (
                 <Link
-                  href="/invoices?status=sent"
+                  href="/invoices?status=overdue"
                   className="inline-flex items-center gap-1.5 bg-red-100 border border-red-200 text-red-800 text-xs font-medium px-3 py-1.5 rounded-full hover:bg-red-200 transition-colors"
                   data-testid="alert-overdue-invoices"
                 >

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useGetDashboardStats, getGetDashboardStatsQueryKey, useGetTopProducts, getGetTopProductsQueryKey } from "@workspace/api-client-react";
-import { BarChart3, TrendingUp, Users, Package, Receipt } from "lucide-react";
+import { BarChart3, TrendingUp, Users, Package, Receipt, Leaf, MapPin, Award } from "lucide-react";
 import { formatKES, TIER_COLORS } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -79,6 +79,15 @@ export default function Reports() {
     queryKey: ["reports", "quote-funnel"],
     queryFn: async () => {
       const res = await fetch(`${BASE}/api/reports/quote-funnel`);
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
+  const { data: supplierEsg, isLoading: esgLoading } = useQuery({
+    queryKey: ["reports", "supplier-esg"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/reports/supplier-esg`);
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -286,6 +295,85 @@ export default function Reports() {
               })}
             </div>
           )}
+        </div>
+
+        {/* ESG / Supplier Diversity */}
+        <div className="bg-card border border-card-border rounded-xl p-5 shadow-sm mb-6">
+          <div className="flex items-center gap-2 mb-5">
+            <Leaf size={15} className="text-green-600" />
+            <p className="text-sm font-semibold text-foreground">Supplier Impact & ESG Profile</p>
+            <span className="text-xs text-muted-foreground ml-1">— verified Kenyan suppliers only</span>
+          </div>
+          {esgLoading ? (
+            <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
+          ) : (() => {
+            const esg = supplierEsg as any;
+            if (!esg) return null;
+            const maxArtisans = Math.max(...(esg.by_county ?? []).map((c: any) => c.artisans), 1);
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* KPI strip */}
+                <div className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: "Verified Suppliers", value: esg.total_verified, icon: Award, color: "text-primary bg-primary/10" },
+                    { label: "Total Artisans", value: esg.total_artisans, icon: Users, color: "text-emerald-700 bg-emerald-50" },
+                    { label: "Women-Led", value: `${esg.women_led_pct}%`, icon: Leaf, color: "text-pink-700 bg-pink-50" },
+                    { label: "Counties Covered", value: esg.counties_covered, icon: MapPin, color: "text-amber-700 bg-amber-50" },
+                  ].map(({ label, value, icon: Icon, color }) => (
+                    <div key={label} className="bg-muted/30 rounded-xl p-4 flex flex-col gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${color}`}>
+                        <Icon size={13} />
+                      </div>
+                      <p className="text-xl font-bold text-foreground tabular-nums">{value}</p>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* County breakdown */}
+                <div className="lg:col-span-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <MapPin size={11} /> Artisans by County
+                  </p>
+                  <div className="space-y-2.5">
+                    {(esg.by_county ?? []).map((row: any) => (
+                      <div key={row.county}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-foreground font-medium">{row.county}</span>
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            {row.artisans} artisans · {row.suppliers} supplier{row.suppliers !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-500 rounded-full transition-all"
+                            style={{ width: `${Math.round((row.artisans / maxArtisans) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Certifications */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <Award size={11} /> Certifications
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(esg.top_certifications ?? []).map((cert: any) => (
+                      <span
+                        key={cert.name}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 border border-green-200 text-green-800"
+                      >
+                        <Leaf size={10} /> {cert.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Top Clients */}
