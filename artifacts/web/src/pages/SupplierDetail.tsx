@@ -67,6 +67,10 @@ export default function SupplierDetail() {
       description: s?.description ?? "",
       story: s?.story ?? "",
       onboardingStatus: s?.onboardingStatus ?? "pending",
+      womenLed: s?.womenLed ? "true" : "false",
+      artisanCount: s?.artisanCount != null ? String(s.artisanCount) : "",
+      certifications: Array.isArray(s?.certifications) ? (s.certifications as string[]).join(", ") : "",
+      esgNotes: s?.esgNotes ?? "",
     });
     setShowEdit(true);
   };
@@ -388,13 +392,77 @@ export default function SupplierDetail() {
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                 />
               </div>
+
+              {/* ESG / Impact */}
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs font-semibold text-green-800 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                  <Leaf size={11} /> Impact & ESG
+                </p>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={editForm.womenLed === "true"}
+                      onClick={() => setEditForm(f => ({ ...f, womenLed: f.womenLed === "true" ? "false" : "true" }))}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none flex-shrink-0 ${editForm.womenLed === "true" ? "bg-rose-500" : "bg-muted-foreground/30"}`}
+                      data-testid="toggle-women-led"
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${editForm.womenLed === "true" ? "translate-x-4" : "translate-x-0.5"}`} />
+                    </button>
+                    <span className="text-sm text-foreground">Women-Led Enterprise</span>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Artisans / Employees Supported</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={editForm.artisanCount}
+                      onChange={e => setEditForm(f => ({ ...f, artisanCount: e.target.value }))}
+                      placeholder="e.g. 42"
+                      data-testid="input-artisan-count"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Certifications <span className="font-normal text-muted-foreground/70">(comma-separated)</span></label>
+                    <Input
+                      value={editForm.certifications}
+                      onChange={e => setEditForm(f => ({ ...f, certifications: e.target.value }))}
+                      placeholder="UTZ Certified, Rainforest Alliance, KEBS"
+                      data-testid="input-certifications"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">ESG Notes</label>
+                    <textarea
+                      rows={3}
+                      value={editForm.esgNotes}
+                      onChange={e => setEditForm(f => ({ ...f, esgNotes: e.target.value }))}
+                      placeholder="Describe environmental and social impact…"
+                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                      data-testid="textarea-esg-notes"
+                    />
+                  </div>
+                </div>
+              </div>
               {saveError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>}
             </div>
             <div className="sticky bottom-0 bg-card border-t border-border px-6 py-4 flex gap-3 justify-end rounded-b-xl">
               <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
               <Button
                 disabled={!editForm.name.trim() || saveSupplier.isPending}
-                onClick={() => saveSupplier.mutate({ ...editForm })}
+                onClick={() => {
+                  const { womenLed, artisanCount, certifications, esgNotes, ...rest } = editForm;
+                  saveSupplier.mutate({
+                    ...rest,
+                    womenLed: womenLed === "true",
+                    artisanCount: artisanCount ? parseInt(artisanCount, 10) : null,
+                    certifications: certifications
+                      ? certifications.split(",").map((c: string) => c.trim()).filter(Boolean)
+                      : [],
+                    esgNotes: esgNotes || null,
+                  });
+                }}
               >
                 {saveSupplier.isPending ? "Saving…" : "Save Changes"}
               </Button>
