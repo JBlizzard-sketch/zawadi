@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { quotesTable, productsTable, ordersTable, orderItemsTable, corporatesTable } from "@workspace/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, lt, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 const VAT_RATE = 0.16; // Kenya VAT 16%
@@ -10,6 +10,14 @@ const router = Router();
 
 router.get("/quotes", async (req, res) => {
   try {
+    // Auto-expire sent quotes whose valid_until has passed
+    await db.update(quotesTable)
+      .set({ status: "expired" })
+      .where(and(
+        inArray(quotesTable.status, ["sent", "draft"] as any[]),
+        lt(quotesTable.validUntil, sql`now()`)
+      ));
+
     const { corporate_id, status } = req.query as Record<string, string>;
     const conditions = [];
     if (corporate_id) conditions.push(eq(quotesTable.corporateId, corporate_id));

@@ -6,7 +6,7 @@ import {
   productsTable,
   insertHamperSchema,
 } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -32,7 +32,7 @@ router.get("/hampers/:id", async (req, res) => {
     const itemRows = await db.select().from(hamperItemsTable).where(eq(hamperItemsTable.hamperId, hamper.id));
     const productIds = itemRows.map((i) => i.productId);
     const products = productIds.length > 0
-      ? await db.select().from(productsTable)
+      ? await db.select().from(productsTable).where(inArray(productsTable.id, productIds))
       : [];
     const productMap = Object.fromEntries(products.map((p) => [p.id, p]));
     const items = itemRows.map((item) => ({ ...item, product: productMap[item.productId] ?? null }));

@@ -56,7 +56,7 @@ export default function CollectionDetail() {
     { limit: 200, offset: 0 },
     { query: { queryKey: getListProductsQueryKey({ limit: 200, offset: 0 }), enabled: showProducts } }
   );
-  const allProducts = (allProductsData as any)?.products ?? (Array.isArray(allProductsData) ? allProductsData : []);
+  const allProducts = (allProductsData as any)?.items ?? [];
 
   const openProducts = () => {
     const existing = new Set<string>((col?.products ?? []).map((p: any) => p.id));

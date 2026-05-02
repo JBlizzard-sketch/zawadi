@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { Gift, Plus, Minus, Trash2, Package, ShoppingCart, X, ChevronDown } from "lucide-react";
+import { Gift, Plus, Minus, Trash2, Package, ShoppingCart, X, ChevronDown, Save } from "lucide-react";
 import {
   useListProducts, getListProductsQueryKey,
   useListCategories, getListCategoriesQueryKey,
@@ -36,6 +36,9 @@ export default function HamperBuilder() {
   const [hamperName, setHamperName] = useState("My Zawadi Hamper");
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [loadedHamperId, setLoadedHamperId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
 
   const [showModal, setShowModal] = useState(false);
   const [corporateId, setCorporateId] = useState("");
@@ -43,17 +46,43 @@ export default function HamperBuilder() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
   // URL-param pre-load state
   const pendingIdsRef = useRef<string[]>([]);
   const pendingNameRef = useRef<string>("");
   const preloadDoneRef = useRef(false);
 
-  // Parse URL params once on mount
+  // Parse URL params once on mount — handles ?hamperId=, ?add=, ?products=, ?name=
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const add = sp.get("add");
     const products = sp.get("products");
     const name = sp.get("name");
+    const hamperId = sp.get("hamperId");
+
+    if (hamperId) {
+      // Load a saved hamper directly from the API
+      fetch(`${BASE}/api/hampers/${hamperId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data?.id) return;
+          setHamperName(data.name ?? "My Zawadi Hamper");
+          setLoadedHamperId(data.id);
+          const items: HamperItem[] = (data.items ?? []).map((item: any) => ({
+            productId: item.productId,
+            name: item.product?.name ?? "Unknown Product",
+            unitPrice: parseFloat(item.unitPrice ?? item.product?.unitPrice ?? "0"),
+            quantity: item.quantity ?? 1,
+            origin: item.product?.origin ?? "",
+            brandedPackaging: false,
+          }));
+          setHamper(items);
+        })
+        .catch(() => {/* silently ignore */});
+      window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
 
     if (add) pendingIdsRef.current = [add];
     else if (products) pendingIdsRef.current = products.split(",").filter(Boolean);
@@ -63,6 +92,41 @@ export default function HamperBuilder() {
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
+
+  const handleSaveHamper = async () => {
+    if (hamper.length === 0) return;
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      const body = {
+        name: hamperName,
+        items: hamper.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
+      };
+      let res: Response;
+      if (loadedHamperId) {
+        res = await fetch(`${BASE}/api/hampers/${loadedHamperId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } else {
+        res = await fetch(`${BASE}/api/hampers`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      }
+      if (!res.ok) throw new Error("Failed to save");
+      const saved = await res.json();
+      if (!loadedHamperId) setLoadedHamperId(saved.id);
+      setSaveMsg("Saved!");
+      setTimeout(() => setSaveMsg(""), 3000);
+    } catch {
+      setSaveMsg("Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Use a wider limit so we can find products by ID regardless of search state
   const params = { search: search || undefined, category_id: categoryId || undefined, limit: 50, offset: 0 };
@@ -179,9 +243,30 @@ export default function HamperBuilder() {
   return (
     <Layout>
       <div className="p-8 max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-serif font-semibold text-foreground">Hamper Builder</h1>
-          <p className="text-sm text-muted-foreground mt-1">Design a custom gift hamper from Kenyan artisan products</p>
+        <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-serif font-semibold text-foreground">Hamper Builder</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {loadedHamperId ? `Editing saved hamper` : "Design a custom gift hamper from Kenyan artisan products"}
+            </p>
+          </div>
+          {hamper.length > 0 && (
+            <div className="flex items-center gap-2">
+              {saveMsg && (
+                <span className={`text-xs font-medium ${saveMsg === "Saved!" ? "text-green-700" : "text-red-600"}`}>{saveMsg}</span>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={handleSaveHamper}
+                disabled={saving}
+                data-testid="button-save-hamper"
+              >
+                <Save size={13} /> {saving ? "Saving…" : loadedHamperId ? "Save Hamper" : "Save as Template"}
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
