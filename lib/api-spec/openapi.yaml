@@ -2,21 +2,44 @@ openapi: 3.1.0
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 1.0.0
+  description: Zawadi — Premium Kenyan Corporate Gifting Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: products
+    description: Product catalogue management
+  - name: categories
+    description: Product categories
+  - name: suppliers
+    description: Supplier onboarding and management
+  - name: collections
+    description: Curated gift collections
+  - name: hampers
+    description: Custom hamper builder
+  - name: corporates
+    description: Corporate account management
+  - name: quotes
+    description: Instant quote engine
+  - name: orders
+    description: Order lifecycle management
+  - name: recipients
+    description: Bulk recipient management and personalisation
+  - name: invoices
+    description: KRA-compliant invoicing
+  - name: dashboard
+    description: Analytics and dashboard data
+
 paths:
+  # ── Health ────────────────────────────────────────────────────────────────
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +47,1927 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Categories ────────────────────────────────────────────────────────────
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [categories]
+      summary: List all product categories
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+
+  # ── Products ──────────────────────────────────────────────────────────────
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List products with optional filters
+      parameters:
+        - name: category_id
+          in: query
+          schema: { type: string }
+        - name: supplier_id
+          in: query
+          schema: { type: string }
+        - name: occasion
+          in: query
+          schema: { type: string }
+        - name: min_price
+          in: query
+          schema: { type: number }
+        - name: max_price
+          in: query
+          schema: { type: number }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: is_featured
+          in: query
+          schema: { type: boolean }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 24 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Paginated product list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductListResponse"
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create a new product (admin/supplier)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductInput"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get a single product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductInput"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Suppliers ─────────────────────────────────────────────────────────────
+  /suppliers:
+    get:
+      operationId: listSuppliers
+      tags: [suppliers]
+      summary: List all suppliers
+      parameters:
+        - name: is_verified
+          in: query
+          schema: { type: boolean }
+        - name: county
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of suppliers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supplier"
+    post:
+      operationId: createSupplier
+      tags: [suppliers]
+      summary: Submit a supplier application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupplierInput"
+      responses:
+        "201":
+          description: Created supplier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+
+  /suppliers/{id}:
+    get:
+      operationId: getSupplier
+      tags: [suppliers]
+      summary: Get supplier details and story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Supplier details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+    put:
+      operationId: updateSupplier
+      tags: [suppliers]
+      summary: Update supplier profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSupplierInput"
+      responses:
+        "200":
+          description: Updated supplier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+
+  # ── Collections ───────────────────────────────────────────────────────────
+  /collections:
+    get:
+      operationId: listCollections
+      tags: [collections]
+      summary: List curated gift collections
+      parameters:
+        - name: occasion
+          in: query
+          schema: { type: string }
+        - name: is_featured
+          in: query
+          schema: { type: boolean }
+        - name: min_price
+          in: query
+          schema: { type: number }
+        - name: max_price
+          in: query
+          schema: { type: number }
+      responses:
+        "200":
+          description: List of collections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Collection"
+    post:
+      operationId: createCollection
+      tags: [collections]
+      summary: Create a curated collection (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCollectionInput"
+      responses:
+        "201":
+          description: Created collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collection"
+
+  /collections/{id}:
+    get:
+      operationId: getCollection
+      tags: [collections]
+      summary: Get collection details with products
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Collection with products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionWithProducts"
+    put:
+      operationId: updateCollection
+      tags: [collections]
+      summary: Update a collection
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCollectionInput"
+      responses:
+        "200":
+          description: Updated collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collection"
+
+  # ── Hampers ───────────────────────────────────────────────────────────────
+  /hampers:
+    get:
+      operationId: listHampers
+      tags: [hampers]
+      summary: List saved hamper configurations for a corporate
+      parameters:
+        - name: corporate_id
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of hampers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Hamper"
+    post:
+      operationId: createHamper
+      tags: [hampers]
+      summary: Create / save a custom hamper configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHamperInput"
+      responses:
+        "201":
+          description: Created hamper
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hamper"
+
+  /hampers/{id}:
+    get:
+      operationId: getHamper
+      tags: [hampers]
+      summary: Get a hamper with all items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Hamper details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HamperWithItems"
+    put:
+      operationId: updateHamper
+      tags: [hampers]
+      summary: Update hamper items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHamperInput"
+      responses:
+        "200":
+          description: Updated hamper
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hamper"
+    delete:
+      operationId: deleteHamper
+      tags: [hampers]
+      summary: Delete a hamper
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Corporates ────────────────────────────────────────────────────────────
+  /corporates:
+    get:
+      operationId: listCorporates
+      tags: [corporates]
+      summary: List corporate accounts (admin)
+      parameters:
+        - name: tier
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of corporates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Corporate"
+    post:
+      operationId: createCorporate
+      tags: [corporates]
+      summary: Register a new corporate account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCorporateInput"
+      responses:
+        "201":
+          description: Created corporate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Corporate"
+
+  /corporates/{id}:
+    get:
+      operationId: getCorporate
+      tags: [corporates]
+      summary: Get corporate account details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Corporate details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Corporate"
+    put:
+      operationId: updateCorporate
+      tags: [corporates]
+      summary: Update corporate account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCorporateInput"
+      responses:
+        "200":
+          description: Updated corporate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Corporate"
+
+  # ── Quotes ────────────────────────────────────────────────────────────────
+  /quotes:
+    get:
+      operationId: listQuotes
+      tags: [quotes]
+      summary: List quotes for a corporate
+      parameters:
+        - name: corporate_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of quotes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Quote"
+    post:
+      operationId: createQuote
+      tags: [quotes]
+      summary: Generate an instant quote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuoteInput"
+      responses:
+        "201":
+          description: Generated quote with line items and totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+
+  /quotes/{id}:
+    get:
+      operationId: getQuote
+      tags: [quotes]
+      summary: Get a quote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Quote details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+
+  /quotes/{id}/convert:
+    post:
+      operationId: convertQuoteToOrder
+      tags: [quotes]
+      summary: Convert an accepted quote into an order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Created order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  # ── Orders ────────────────────────────────────────────────────────────────
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List orders
+      parameters:
+        - name: corporate_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Paginated order list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderListResponse"
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Place an order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderInput"
+      responses:
+        "201":
+          description: Created order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get full order details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Order with items and timeline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderWithItems"
+    put:
+      operationId: updateOrder
+      tags: [orders]
+      summary: Update order (admin — status, delivery date, notes)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderInput"
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}/cancel:
+    post:
+      operationId: cancelOrder
+      tags: [orders]
+      summary: Cancel an order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Cancelled order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  # ── Recipients ────────────────────────────────────────────────────────────
+  /recipients:
+    get:
+      operationId: listRecipients
+      tags: [recipients]
+      summary: List recipients for an order
+      parameters:
+        - name: order_id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of recipients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Recipient"
+    post:
+      operationId: createRecipient
+      tags: [recipients]
+      summary: Add a single recipient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecipientInput"
+      responses:
+        "201":
+          description: Created recipient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recipient"
+
+  /recipients/bulk:
+    post:
+      operationId: bulkCreateRecipients
+      tags: [recipients]
+      summary: Bulk upload recipients (CSV payload) with personalisation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkCreateRecipientsInput"
+      responses:
+        "201":
+          description: Bulk upload result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkRecipientsResult"
+
+  /recipients/{id}:
+    put:
+      operationId: updateRecipient
+      tags: [recipients]
+      summary: Update recipient personalisation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRecipientInput"
+      responses:
+        "200":
+          description: Updated recipient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recipient"
+    delete:
+      operationId: deleteRecipient
+      tags: [recipients]
+      summary: Remove a recipient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Invoices ──────────────────────────────────────────────────────────────
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List invoices for a corporate
+      parameters:
+        - name: corporate_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invoice"
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Generate a KRA-compliant invoice for an order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceInput"
+      responses:
+        "201":
+          description: Created invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /invoices/{id}:
+    get:
+      operationId: getInvoice
+      tags: [invoices]
+      summary: Get invoice details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  # ── Dashboard ─────────────────────────────────────────────────────────────
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get overview stats for the admin dashboard
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /dashboard/corporate/{corporateId}:
+    get:
+      operationId: getCorporateDashboard
+      tags: [dashboard]
+      summary: Get dashboard data for a specific corporate account
+      parameters:
+        - name: corporateId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Corporate dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorporateDashboard"
+
+  /dashboard/recent-orders:
+    get:
+      operationId: getRecentOrders
+      tags: [dashboard]
+      summary: Get the most recent orders across all corporates
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Recent orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+  /dashboard/top-products:
+    get:
+      operationId: getTopProducts
+      tags: [dashboard]
+      summary: Most ordered products in a date range
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Top products by order volume
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopProduct"
+
+# ── Schemas ──────────────────────────────────────────────────────────────────
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        details:
+          type: string
+
+    # ── Category ──────────────────────────────────────────────────────────
+    Category:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+        product_count:
+          type: integer
+
+    # ── Supplier ──────────────────────────────────────────────────────────
+    Supplier:
+      type: object
+      required: [id, name, county, is_verified, onboarding_status, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        contact_name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        county:
+          type: string
+        description:
+          type: string
+          nullable: true
+        story:
+          type: string
+          nullable: true
+        cover_image_url:
+          type: string
+          nullable: true
+        logo_url:
+          type: string
+          nullable: true
+        is_verified:
+          type: boolean
+        onboarding_status:
+          type: string
+          enum: [pending, under_review, approved, rejected]
+        tags:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateSupplierInput:
+      type: object
+      required: [name, county, contact_name, email, phone]
+      properties:
+        name:
+          type: string
+        county:
+          type: string
+        contact_name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        description:
+          type: string
+          nullable: true
+        story:
+          type: string
+          nullable: true
+
+    UpdateSupplierInput:
+      type: object
+      properties:
+        name:
+          type: string
+        county:
+          type: string
+        contact_name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        description:
+          type: string
+          nullable: true
+        story:
+          type: string
+          nullable: true
+        cover_image_url:
+          type: string
+          nullable: true
+        logo_url:
+          type: string
+          nullable: true
+        is_verified:
+          type: boolean
+        onboarding_status:
+          type: string
+          enum: [pending, under_review, approved, rejected]
+
+    # ── Product ───────────────────────────────────────────────────────────
+    Product:
+      type: object
+      required: [id, name, category_id, supplier_id, unit_price, moq, lead_time_days, origin, is_active, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category_id:
+          type: string
+        category:
+          $ref: "#/components/schemas/Category"
+          nullable: true
+        supplier_id:
+          type: string
+        supplier:
+          $ref: "#/components/schemas/Supplier"
+          nullable: true
+        unit_price:
+          type: number
+          description: Price in KES per unit at MOQ
+        bulk_tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkPriceTier"
+        moq:
+          type: integer
+          description: Minimum order quantity
+        lead_time_days:
+          type: integer
+        origin:
+          type: string
+          description: County/region of origin
+        tags:
+          type: array
+          items:
+            type: string
+        occasion_tags:
+          type: array
+          items:
+            type: string
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductImage"
+        is_active:
+          type: boolean
+        is_featured:
+          type: boolean
+        weight_grams:
+          type: integer
+          nullable: true
+        dimensions_cm:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    BulkPriceTier:
+      type: object
+      required: [min_qty, price_per_unit]
+      properties:
+        min_qty:
+          type: integer
+        price_per_unit:
+          type: number
+
+    ProductImage:
+      type: object
+      required: [id, url, is_primary]
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        alt:
+          type: string
+          nullable: true
+        is_primary:
+          type: boolean
+
+    CreateProductInput:
+      type: object
+      required: [name, category_id, supplier_id, unit_price, moq, lead_time_days, origin]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category_id:
+          type: string
+        supplier_id:
+          type: string
+        unit_price:
+          type: number
+        bulk_tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkPriceTier"
+        moq:
+          type: integer
+        lead_time_days:
+          type: integer
+        origin:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        occasion_tags:
+          type: array
+          items:
+            type: string
+        is_featured:
+          type: boolean
+
+    UpdateProductInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        unit_price:
+          type: number
+        bulk_tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkPriceTier"
+        moq:
+          type: integer
+        lead_time_days:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+        is_active:
+          type: boolean
+        is_featured:
+          type: boolean
+
+    ProductListResponse:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    # ── Collection ────────────────────────────────────────────────────────
+    Collection:
+      type: object
+      required: [id, name, slug, occasion, is_featured, min_price, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        occasion:
+          type: string
+          enum: [client_gifts, staff_appreciation, event_giveaways, festive_hampers, onboarding_kits, custom]
+        description:
+          type: string
+          nullable: true
+        cover_image_url:
+          type: string
+          nullable: true
+        is_featured:
+          type: boolean
+        min_price:
+          type: number
+        max_price:
+          type: number
+          nullable: true
+        product_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    CollectionWithProducts:
+      allOf:
+        - $ref: "#/components/schemas/Collection"
+        - type: object
+          properties:
+            products:
+              type: array
+              items:
+                $ref: "#/components/schemas/Product"
+
+    CreateCollectionInput:
+      type: object
+      required: [name, occasion]
+      properties:
+        name:
+          type: string
+        occasion:
+          type: string
+          enum: [client_gifts, staff_appreciation, event_giveaways, festive_hampers, onboarding_kits, custom]
+        description:
+          type: string
+          nullable: true
+        cover_image_url:
+          type: string
+          nullable: true
+        is_featured:
+          type: boolean
+        product_ids:
+          type: array
+          items:
+            type: string
+
+    UpdateCollectionInput:
+      type: object
+      properties:
+        name:
+          type: string
+        occasion:
+          type: string
+        description:
+          type: string
+          nullable: true
+        cover_image_url:
+          type: string
+          nullable: true
+        is_featured:
+          type: boolean
+        product_ids:
+          type: array
+          items:
+            type: string
+
+    # ── Hamper ────────────────────────────────────────────────────────────
+    HamperItem:
+      type: object
+      required: [id, product_id, quantity, unit_price]
+      properties:
+        id:
+          type: string
+        product_id:
+          type: string
+        product:
+          $ref: "#/components/schemas/Product"
+          nullable: true
+        quantity:
+          type: integer
+        unit_price:
+          type: number
+
+    Hamper:
+      type: object
+      required: [id, name, total_price, status, created_at]
+      properties:
+        id:
+          type: string
+        corporate_id:
+          type: string
+          nullable: true
+        name:
+          type: string
+        occasion:
+          type: string
+          nullable: true
+        total_price:
+          type: number
+        item_count:
+          type: integer
+        status:
+          type: string
+          enum: [draft, saved, ordered]
+        created_at:
+          type: string
+          format: date-time
+
+    HamperWithItems:
+      allOf:
+        - $ref: "#/components/schemas/Hamper"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/HamperItem"
+
+    CreateHamperInput:
+      type: object
+      required: [name, items]
+      properties:
+        corporate_id:
+          type: string
+          nullable: true
+        name:
+          type: string
+        occasion:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            type: object
+            required: [product_id, quantity]
+            properties:
+              product_id:
+                type: string
+              quantity:
+                type: integer
+
+    UpdateHamperInput:
+      type: object
+      properties:
+        name:
+          type: string
+        occasion:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            type: object
+            required: [product_id, quantity]
+            properties:
+              product_id:
+                type: string
+              quantity:
+                type: integer
+
+    # ── Corporate ─────────────────────────────────────────────────────────
+    Corporate:
+      type: object
+      required: [id, name, email, tier, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        kra_pin:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        industry:
+          type: string
+          nullable: true
+        tier:
+          type: string
+          enum: [standard, premium, enterprise]
+        payment_terms:
+          type: string
+          enum: [prepaid, net_15, net_30, net_60]
+          nullable: true
+        account_manager_name:
+          type: string
+          nullable: true
+        total_orders:
+          type: integer
+        total_spend:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+
+    CreateCorporateInput:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        kra_pin:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        industry:
+          type: string
+          nullable: true
+
+    UpdateCorporateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        kra_pin:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        industry:
+          type: string
+          nullable: true
+        tier:
+          type: string
+          enum: [standard, premium, enterprise]
+        payment_terms:
+          type: string
+          enum: [prepaid, net_15, net_30, net_60]
+          nullable: true
+        account_manager_name:
+          type: string
+          nullable: true
+
+    # ── Quote ─────────────────────────────────────────────────────────────
+    QuoteItem:
+      type: object
+      required: [product_id, product_name, quantity, unit_price, line_total]
+      properties:
+        product_id:
+          type: string
+        product_name:
+          type: string
+        quantity:
+          type: integer
+        unit_price:
+          type: number
+        line_total:
+          type: number
+        branded_packaging:
+          type: boolean
+        personalisation:
+          type: boolean
+
+    Quote:
+      type: object
+      required: [id, status, subtotal, vat, total, valid_until, created_at]
+      properties:
+        id:
+          type: string
+        corporate_id:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [draft, sent, accepted, rejected, expired]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuoteItem"
+        subtotal:
+          type: number
+        vat:
+          type: number
+        total:
+          type: number
+        notes:
+          type: string
+          nullable: true
+        valid_until:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    CreateQuoteInput:
+      type: object
+      required: [items]
+      properties:
+        corporate_id:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            type: object
+            required: [product_id, quantity]
+            properties:
+              product_id:
+                type: string
+              quantity:
+                type: integer
+              branded_packaging:
+                type: boolean
+              personalisation:
+                type: boolean
+        notes:
+          type: string
+          nullable: true
+
+    # ── Order ─────────────────────────────────────────────────────────────
+    OrderItem:
+      type: object
+      required: [id, product_id, product_name, quantity, unit_price, line_total]
+      properties:
+        id:
+          type: string
+        product_id:
+          type: string
+        product_name:
+          type: string
+        quantity:
+          type: integer
+        unit_price:
+          type: number
+        line_total:
+          type: number
+        personalisation_text:
+          type: string
+          nullable: true
+        branded_packaging:
+          type: boolean
+
+    Order:
+      type: object
+      required: [id, corporate_id, status, subtotal, vat, total, created_at]
+      properties:
+        id:
+          type: string
+        reference:
+          type: string
+          description: Human-readable order reference e.g. ZWD-2026-0042
+        corporate_id:
+          type: string
+        corporate_name:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, confirmed, in_production, quality_check, packaging, dispatched, delivered, cancelled]
+        subtotal:
+          type: number
+        vat:
+          type: number
+        total:
+          type: number
+        delivery_address:
+          type: string
+          nullable: true
+        delivery_date:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        recipient_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    OrderWithItems:
+      allOf:
+        - $ref: "#/components/schemas/Order"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/OrderItem"
+            recipients:
+              type: array
+              items:
+                $ref: "#/components/schemas/Recipient"
+
+    OrderListResponse:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    CreateOrderInput:
+      type: object
+      required: [corporate_id, items, delivery_address]
+      properties:
+        corporate_id:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            required: [product_id, quantity]
+            properties:
+              product_id:
+                type: string
+              quantity:
+                type: integer
+              branded_packaging:
+                type: boolean
+              personalisation_text:
+                type: string
+                nullable: true
+        delivery_address:
+          type: string
+        delivery_date:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        quote_id:
+          type: string
+          nullable: true
+
+    UpdateOrderInput:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, confirmed, in_production, quality_check, packaging, dispatched, delivered, cancelled]
+        delivery_date:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    # ── Recipient ─────────────────────────────────────────────────────────
+    Recipient:
+      type: object
+      required: [id, order_id, name]
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        department:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        personalisation_message:
+          type: string
+          nullable: true
+        delivery_address:
+          type: string
+          nullable: true
+
+    CreateRecipientInput:
+      type: object
+      required: [order_id, name]
+      properties:
+        order_id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        department:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        personalisation_message:
+          type: string
+          nullable: true
+        delivery_address:
+          type: string
+          nullable: true
+
+    UpdateRecipientInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        department:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        personalisation_message:
+          type: string
+          nullable: true
+        delivery_address:
+          type: string
+          nullable: true
+
+    BulkCreateRecipientsInput:
+      type: object
+      required: [order_id, recipients]
+      properties:
+        order_id:
+          type: string
+        recipients:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateRecipientInput"
+        default_message_template:
+          type: string
+          nullable: true
+          description: "Template with {{name}}, {{title}}, {{department}} placeholders"
+
+    BulkRecipientsResult:
+      type: object
+      required: [created, failed, total]
+      properties:
+        created:
+          type: integer
+        failed:
+          type: integer
+        total:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              row:
+                type: integer
+              error:
+                type: string
+
+    # ── Invoice ───────────────────────────────────────────────────────────
+    Invoice:
+      type: object
+      required: [id, order_id, invoice_number, amount, status, created_at]
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        corporate_id:
+          type: string
+          nullable: true
+        invoice_number:
+          type: string
+        kra_pin:
+          type: string
+          nullable: true
+        amount:
+          type: number
+        vat_amount:
+          type: number
+        total_amount:
+          type: number
+        status:
+          type: string
+          enum: [draft, sent, paid, overdue, cancelled]
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+        pdf_url:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    CreateInvoiceInput:
+      type: object
+      required: [order_id]
+      properties:
+        order_id:
+          type: string
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ── Dashboard ─────────────────────────────────────────────────────────
+    DashboardStats:
+      type: object
+      required: [total_orders, total_revenue, total_corporates, total_suppliers, orders_this_month, revenue_this_month]
+      properties:
+        total_orders:
+          type: integer
+        total_revenue:
+          type: number
+        total_corporates:
+          type: integer
+        total_suppliers:
+          type: integer
+        orders_this_month:
+          type: integer
+        revenue_this_month:
+          type: number
+        pending_orders:
+          type: integer
+        orders_by_status:
+          type: array
+          items:
+            type: object
+            required: [status, count]
+            properties:
+              status:
+                type: string
+              count:
+                type: integer
+        revenue_by_month:
+          type: array
+          items:
+            type: object
+            required: [month, revenue]
+            properties:
+              month:
+                type: string
+              revenue:
+                type: number
+
+    CorporateDashboard:
+      type: object
+      required: [corporate_id, total_orders, total_spend, active_orders]
+      properties:
+        corporate_id:
+          type: string
+        total_orders:
+          type: integer
+        total_spend:
+          type: number
+        active_orders:
+          type: integer
+        recent_orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        upcoming_occasions:
+          type: array
+          items:
+            type: object
+            properties:
+              occasion:
+                type: string
+              date:
+                type: string
+              days_until:
+                type: integer
+        spend_by_month:
+          type: array
+          items:
+            type: object
+            required: [month, spend]
+            properties:
+              month:
+                type: string
+              spend:
+                type: number
+
+    TopProduct:
+      type: object
+      required: [product_id, product_name, total_units, total_revenue]
+      properties:
+        product_id:
+          type: string
+        product_name:
+          type: string
+        supplier_name:
+          type: string
+          nullable: true
+        total_units:
+          type: integer
+        total_revenue:
+          type: number
+        image_url:
+          type: string
+          nullable: true

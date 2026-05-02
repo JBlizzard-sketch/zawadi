@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * github-push.mjs
- * Pushes the workspace to GitHub using the Git Data API (no git CLI needed).
- * Handles both empty repos (bootstrap via Contents API) and existing ones.
+ * Pushes only changed files to GitHub using the Git Data API.
+ * Compares local SHA1 against the existing tree to skip unchanged files.
  *
  * Usage: node scripts/github-push.mjs "optional commit message"
  * Env:   GITHUB_TOKEN must be set
@@ -10,6 +10,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -28,7 +29,7 @@ const HDRS = {
   Authorization:  `token ${TOKEN}`,
   Accept:         'application/vnd.github.v3+json',
   'Content-Type': 'application/json',
-  'User-Agent':   'zawadi-push-script/1.0',
+  'User-Agent':   'zawadi-push-script/2.0',
 };
 
 async function api(method, url, body) {
@@ -40,7 +41,15 @@ async function api(method, url, body) {
   return r.json();
 }
 
-// ── File walker ──────────────────────────────────────────────────────────────
+// Compute git-style blob SHA1: "blob <size>\0<content>"
+function gitBlobSha(buf) {
+  const header = `blob ${buf.length}\0`;
+  const h = crypto.createHash('sha1');
+  h.update(header);
+  h.update(buf);
+  return h.digest('hex');
+}
+
 const SKIP_DIRS  = new Set(['node_modules','.local','dist','build','.next','.expo',
                              '.cache','.upm','coverage','.git']);
 const SKIP_NAMES = new Set(['pnpm-lock.yaml','.replit','replit.nix']);
@@ -59,29 +68,35 @@ function walk(dir, rel = '') {
   return out;
 }
 
-// ── Bootstrap an empty repo via Contents API, return the commit SHA ──────────
+// Recursively fetch the full flat tree from GitHub (handles truncation)
+async function fetchFullTree(treeSha) {
+  const res = await api('GET', `${BASE}/git/trees/${treeSha}?recursive=1`);
+  const map = {};
+  for (const item of res.tree) {
+    if (item.type === 'blob') map[item.path] = item.sha;
+  }
+  return map;
+}
+
 async function bootstrapEmpty() {
   console.log('🌱 Bootstrapping empty repo via Contents API...');
   const readmePath = path.join(ROOT, 'README.md');
   const content = fs.existsSync(readmePath)
     ? fs.readFileSync(readmePath).toString('base64')
     : Buffer.from('# zawadi\n').toString('base64');
-
   const res = await api('PUT', `${BASE}/contents/README.md`, {
     message: 'chore: bootstrap repo',
     content,
     branch: BRANCH,
   });
-  const sha = res.commit.sha;
-  console.log(`✅ Bootstrap commit: ${sha.slice(0,7)}`);
-  return sha;
+  console.log(`✅ Bootstrap commit: ${res.commit.sha.slice(0,7)}`);
+  return res.commit.sha;
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`\n🚀  Pushing to https://github.com/${OWNER}/${REPO} [${BRANCH}]\n`);
 
-  // 1. Get current HEAD SHA (if branch/repo exists)
+  // 1. Get current HEAD SHA
   let parentSha = null;
   try {
     const ref = await api('GET', `${BASE}/git/ref/heads/${BRANCH}`);
@@ -95,35 +110,67 @@ async function main() {
     }
   }
 
-  // 2. Collect files
-  const files = walk(ROOT);
-  console.log(`📦 ${files.length} files staged`);
-
-  // 3. Create blobs in batches of 8
-  const BATCH = 8;
-  const treeItems = [];
-  for (let i = 0; i < files.length; i += BATCH) {
-    const batch = files.slice(i, i + BATCH);
-    const blobs = await Promise.all(batch.map(async ({ full, rel }) => {
-      const buf = fs.readFileSync(full);
-      const b64 = buf.toString('base64');
-      const blob = await api('POST', `${BASE}/git/blobs`, { content: b64, encoding: 'base64' });
-      process.stdout.write('.');
-      return { path: rel, mode: '100644', type: 'blob', sha: blob.sha };
-    }));
-    treeItems.push(...blobs);
-  }
-  console.log(`\n🌳 ${treeItems.length} blobs created`);
-
-  // 4. Get base tree from parent commit
+  // 2. Fetch existing remote tree to diff against
+  console.log('🔍 Fetching remote tree for diff...');
   const parentCommit = await api('GET', `${BASE}/git/commits/${parentSha}`);
+  const remoteTree = await fetchFullTree(parentCommit.tree.sha);
+  console.log(`   Remote has ${Object.keys(remoteTree).length} files`);
+
+  // 3. Walk local files and find changed/new ones
+  const allFiles = walk(ROOT);
+  const changed = [];
+  const unchanged = [];
+
+  for (const file of allFiles) {
+    const buf = fs.readFileSync(file.full);
+    const localSha = gitBlobSha(buf);
+    if (remoteTree[file.rel] === localSha) {
+      unchanged.push(file.rel);
+    } else {
+      changed.push({ ...file, buf });
+    }
+  }
+
+  // Files deleted locally
+  const localPaths = new Set(allFiles.map(f => f.rel));
+  const deleted = Object.keys(remoteTree).filter(p => !localPaths.has(p));
+
+  console.log(`📦 ${allFiles.length} total files — ${changed.length} changed, ${unchanged.length} unchanged, ${deleted.length} deleted`);
+
+  if (changed.length === 0 && deleted.length === 0) {
+    console.log('\n✅  Nothing to push — remote is already up to date.\n');
+    return;
+  }
+
+  // 4. Upload blobs only for changed files — sequential with small delay to avoid secondary rate limits
+  const treeItems = [];
+  const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+  for (let i = 0; i < changed.length; i++) {
+    const { buf, rel } = changed[i];
+    const b64 = buf.toString('base64');
+    const blob = await api('POST', `${BASE}/git/blobs`, { content: b64, encoding: 'base64' });
+    process.stdout.write('.');
+    treeItems.push({ path: rel, mode: '100644', type: 'blob', sha: blob.sha });
+    // Pause every 10 uploads to stay under secondary rate limits
+    if ((i + 1) % 10 === 0) await delay(2000);
+  }
+
+  // Mark deleted files as null sha
+  for (const p of deleted) {
+    treeItems.push({ path: p, mode: '100644', type: 'blob', sha: null });
+  }
+
+  if (changed.length > 0) console.log(`\n🌳 ${changed.length} blobs uploaded`);
+
+  // 5. Create tree
   const tree = await api('POST', `${BASE}/git/trees`, {
     base_tree: parentCommit.tree.sha,
     tree: treeItems,
   });
   console.log(`🌲 Tree SHA: ${tree.sha.slice(0,7)}`);
 
-  // 5. Create commit
+  // 6. Create commit
   const commit = await api('POST', `${BASE}/git/commits`, {
     message: MSG,
     tree: tree.sha,
@@ -136,7 +183,7 @@ async function main() {
   });
   console.log(`✍️  Commit: ${commit.sha.slice(0,7)} — "${MSG}"`);
 
-  // 6. Update ref
+  // 7. Update ref
   await api('PATCH', `${BASE}/git/refs/heads/${BRANCH}`, { sha: commit.sha, force: false });
 
   console.log(`\n✅  https://github.com/${OWNER}/${REPO}/commit/${commit.sha.slice(0,7)}\n`);
