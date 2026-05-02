@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Package, BookOpen, Gift, ShoppingCart,
-  FileText, Receipt, Building2, Layers, ChevronRight, BarChart3,
+  FileText, Receipt, Building2, Layers, ChevronRight, BarChart3, Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SearchCommand from "@/components/ui/SearchCommand";
@@ -17,6 +17,7 @@ const NAV = [
   { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Suppliers", href: "/suppliers", icon: Layers },
   { label: "Corporates", href: "/corporates", icon: Building2 },
+  { label: "Settings", href: "/settings", icon: Settings2 },
 ];
 
 export default function Sidebar() {

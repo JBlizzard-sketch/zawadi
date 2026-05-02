@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { invoicesTable, ordersTable, corporatesTable, insertInvoiceSchema } from "@workspace/db/schema";
+import { invoicesTable, ordersTable, orderItemsTable, corporatesTable, insertInvoiceSchema } from "@workspace/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
 const router = Router();
@@ -34,11 +34,42 @@ router.get("/invoices/:id", async (req, res) => {
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
 
     let corporateName: string | null = null;
+    let corporateAddress: string | null = null;
+    let orderReference: string | null = null;
+    let lineItems: any[] = [];
+
     if (invoice.corporateId) {
-      const [corp] = await db.select({ name: corporatesTable.name }).from(corporatesTable).where(eq(corporatesTable.id, invoice.corporateId));
+      const [corp] = await db.select({
+        name: corporatesTable.name,
+        city: corporatesTable.city,
+        kraPin: corporatesTable.kraPin,
+      }).from(corporatesTable).where(eq(corporatesTable.id, invoice.corporateId));
       corporateName = corp?.name ?? null;
+      corporateAddress = corp?.city ?? null;
     }
-    res.json({ ...invoice, corporate_name: corporateName });
+
+    if (invoice.orderId) {
+      const [order] = await db.select({ reference: ordersTable.reference }).from(ordersTable).where(eq(ordersTable.id, invoice.orderId));
+      orderReference = order?.reference ?? null;
+
+      const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, invoice.orderId));
+      lineItems = items.map(item => ({
+        productName: item.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal: item.lineTotal,
+        brandedPackaging: item.brandedPackaging,
+        personalisationText: item.personalisationText,
+      }));
+    }
+
+    res.json({
+      ...invoice,
+      corporate_name: corporateName,
+      corporate_address: corporateAddress,
+      order_reference: orderReference,
+      line_items: lineItems,
+    });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch invoice" });

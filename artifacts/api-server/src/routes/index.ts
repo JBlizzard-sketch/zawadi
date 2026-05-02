@@ -12,6 +12,7 @@ import recipientsRouter from "./recipients";
 import invoicesRouter from "./invoices";
 import dashboardRouter from "./dashboard";
 import searchRouter from "./search";
+import settingsRouter from "./settings";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(recipientsRouter);
 router.use(invoicesRouter);
 router.use(dashboardRouter);
 router.use(searchRouter);
+router.use(settingsRouter);
 
 export default router;
