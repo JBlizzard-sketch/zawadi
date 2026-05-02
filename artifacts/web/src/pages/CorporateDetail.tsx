@@ -1,5 +1,5 @@
 import { useParams, useLocation, Link } from "wouter";
-import { ArrowLeft, Building2, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Building2, Mail, Phone, FileText, ShoppingCart } from "lucide-react";
 import { useGetCorporate, getGetCorporateQueryKey, useGetCorporateDashboard, getGetCorporateDashboardQueryKey } from "@workspace/api-client-react";
 import { formatKES, formatDate, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, TIER_COLORS } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -78,22 +78,40 @@ export default function CorporateDetail() {
                 </div>
               </div>
             </div>
-            <div className="text-sm space-y-1">
-              {c.email && (
-                <div className="flex items-center gap-2">
-                  <Mail size={13} className="text-muted-foreground" />
-                  <a href={`mailto:${c.email}`} className="text-primary hover:underline">{c.email}</a>
-                </div>
-              )}
-              {c.phone && (
-                <div className="flex items-center gap-2">
-                  <Phone size={13} className="text-muted-foreground" />
-                  <span className="text-foreground">{c.phone}</span>
-                </div>
-              )}
-              {c.accountManagerName && (
-                <p className="text-xs text-muted-foreground">AM: {c.accountManagerName}</p>
-              )}
+            <div className="flex flex-col gap-3 items-end">
+              <div className="flex gap-2">
+                <Link
+                  href={`/quotes/new?corporateId=${c.id}&corporateName=${encodeURIComponent(c.name)}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+                  data-testid="button-new-quote"
+                >
+                  <FileText size={13} /> New Quote
+                </Link>
+                <Link
+                  href={`/hamper-builder`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-foreground text-xs font-semibold hover:bg-muted transition-colors"
+                  data-testid="button-hamper-builder"
+                >
+                  <ShoppingCart size={13} /> Hamper Builder
+                </Link>
+              </div>
+              <div className="text-sm space-y-1 text-right">
+                {c.email && (
+                  <div className="flex items-center gap-2 justify-end">
+                    <a href={`mailto:${c.email}`} className="text-primary hover:underline">{c.email}</a>
+                    <Mail size={13} className="text-muted-foreground" />
+                  </div>
+                )}
+                {c.phone && (
+                  <div className="flex items-center gap-2 justify-end">
+                    <span className="text-foreground">{c.phone}</span>
+                    <Phone size={13} className="text-muted-foreground" />
+                  </div>
+                )}
+                {c.accountManagerName && (
+                  <p className="text-xs text-muted-foreground">AM: {c.accountManagerName}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

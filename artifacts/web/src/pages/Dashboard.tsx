@@ -166,14 +166,23 @@ export default function Dashboard() {
             ) : (
               <div className="divide-y divide-border">
                 {(topProducts as any[])?.slice(0, 6).map((p: any, i: number) => (
-                  <div key={p.product_id} className="flex items-center gap-3 px-5 py-3" data-testid={`top-product-${p.product_id}`}>
-                    <span className="text-xs font-bold text-muted-foreground/50 w-4 tabular-nums">{i + 1}</span>
+                  <Link key={p.product_id} href={`/catalogue/${p.product_id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/40 transition-colors" data-testid={`top-product-${p.product_id}`}>
+                    <span className="text-xs font-bold text-muted-foreground/40 w-4 tabular-nums flex-shrink-0">{i + 1}</span>
+                    <div className="w-8 h-8 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                      {p.image_url ? (
+                        <img src={p.image_url} alt={p.product_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Package size={12} className="text-muted-foreground/40" />
+                        </div>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-foreground truncate">{p.product_name}</p>
                       <p className="text-xs text-muted-foreground">{p.total_units} units</p>
                     </div>
                     <span className="text-xs font-semibold text-foreground tabular-nums">{formatKES(p.total_revenue)}</span>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}

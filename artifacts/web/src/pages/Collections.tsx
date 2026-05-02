@@ -65,8 +65,19 @@ export default function Collections() {
             {(collections as any[])?.map((col: any, i: number) => (
               <Link key={col.id} href={`/collections/${col.id}`} className="group block bg-card border border-card-border rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5" data-testid={`card-collection-${col.id}`}>
                   {/* Cover */}
-                  <div className={`h-44 bg-gradient-to-br ${BG_GRADIENTS[i % BG_GRADIENTS.length]} flex items-center justify-center relative`}>
-                    <BookOpen size={36} className="text-muted-foreground/20" />
+                  <div className={`h-44 relative overflow-hidden ${col.coverImageUrl ? "" : `bg-gradient-to-br ${BG_GRADIENTS[i % BG_GRADIENTS.length]}`}`}>
+                    {col.coverImageUrl ? (
+                      <img
+                        src={col.coverImageUrl}
+                        alt={col.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <BookOpen size={36} className="text-muted-foreground/20" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
                     {col.isFeatured && (
                       <div className="absolute top-3 left-3">
                         <span className="bg-primary text-primary-foreground text-[10px] font-semibold px-2.5 py-1 rounded-full">Featured</span>

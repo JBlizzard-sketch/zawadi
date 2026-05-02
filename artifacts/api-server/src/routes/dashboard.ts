@@ -6,6 +6,7 @@ import {
   suppliersTable,
   productsTable,
   orderItemsTable,
+  productImagesTable,
 } from "@workspace/db/schema";
 import { eq, sql, desc } from "drizzle-orm";
 
@@ -112,12 +113,18 @@ router.get("/dashboard/top-products", async (req, res) => {
       .select({
         product_id: orderItemsTable.productId,
         product_name: orderItemsTable.productName,
-        total_units: sql<number>`sum(quantity)`,
-        total_revenue: sql<number>`sum(line_total::numeric)`,
+        total_units: sql<number>`sum(${orderItemsTable.quantity})`,
+        total_revenue: sql<number>`sum(${orderItemsTable.lineTotal}::numeric)`,
+        image_url: productImagesTable.url,
       })
       .from(orderItemsTable)
-      .groupBy(orderItemsTable.productId, orderItemsTable.productName)
-      .orderBy(desc(sql`sum(quantity)`))
+      .leftJoin(
+        productImagesTable,
+        eq(productImagesTable.productId, orderItemsTable.productId),
+      )
+      .where(eq(productImagesTable.isPrimary, true))
+      .groupBy(orderItemsTable.productId, orderItemsTable.productName, productImagesTable.url)
+      .orderBy(desc(sql`sum(${orderItemsTable.quantity})`))
       .limit(parseInt(limit));
 
     res.json(topProducts.map((r) => ({
@@ -125,6 +132,7 @@ router.get("/dashboard/top-products", async (req, res) => {
       product_name: r.product_name,
       total_units: Number(r.total_units),
       total_revenue: Number(r.total_revenue),
+      image_url: r.image_url ?? null,
     })));
   } catch (err) {
     req.log.error(err);
