@@ -75,6 +75,15 @@ export default function Reports() {
     },
   });
 
+  const { data: quoteFunnel, isLoading: funnelLoading } = useQuery({
+    queryKey: ["reports", "quote-funnel"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/reports/quote-funnel`);
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
   const s = stats as any;
   const products = (topProducts as any[]) ?? [];
   const clients = (topClients as any[]) ?? [];
@@ -229,6 +238,54 @@ export default function Reports() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Quote Conversion Funnel */}
+        <div className="bg-card border border-card-border rounded-xl p-5 shadow-sm mb-6">
+          <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Quote Conversion Funnel</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Pipeline performance across all quotes</p>
+            </div>
+            {!funnelLoading && (quoteFunnel as any)?.win_rate_pct !== null && (
+              <div className="text-right">
+                <p className="text-2xl font-bold text-green-700 tabular-nums">{(quoteFunnel as any).win_rate_pct}%</p>
+                <p className="text-[11px] text-muted-foreground">win rate (closed quotes)</p>
+              </div>
+            )}
+          </div>
+          {funnelLoading ? (
+            <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
+          ) : (
+            <div className="space-y-3">
+              {[
+                { key: "draft", label: "Draft", color: "bg-stone-300" },
+                { key: "sent", label: "Sent to Client", color: "bg-blue-400" },
+                { key: "accepted", label: "Accepted", color: "bg-green-500" },
+                { key: "rejected", label: "Rejected", color: "bg-red-400" },
+                { key: "expired", label: "Expired", color: "bg-amber-400" },
+              ].map(({ key, label, color }) => {
+                const data = (quoteFunnel as any)?.by_status?.[key] ?? { count: 0, value: 0 };
+                const total = (quoteFunnel as any)?.totals?.total ?? 1;
+                const pct = total > 0 ? Math.round((data.count / total) * 100) : 0;
+                return (
+                  <div key={key}>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${color}`} />
+                        <span className="text-xs text-muted-foreground">{label}</span>
+                        <span className="text-xs font-bold text-foreground tabular-nums">{data.count}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground tabular-nums">{formatKES(data.value)}</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Top Clients */}

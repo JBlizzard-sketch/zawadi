@@ -1,12 +1,20 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { invoicesTable, ordersTable, orderItemsTable, corporatesTable, insertInvoiceSchema } from "@workspace/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, lt, sql } from "drizzle-orm";
 
 const router = Router();
 
 router.get("/invoices", async (req, res) => {
   try {
+    // Auto-mark sent invoices as overdue when their due date has passed
+    await db.update(invoicesTable)
+      .set({ status: "overdue", updatedAt: new Date() })
+      .where(and(
+        eq(invoicesTable.status, "sent"),
+        lt(invoicesTable.dueDate, sql`now()`),
+      ));
+
     const { corporate_id, status } = req.query as Record<string, string>;
     const conditions = [];
     if (corporate_id) conditions.push(eq(invoicesTable.corporateId, corporate_id));

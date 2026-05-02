@@ -210,6 +210,43 @@ router.get("/reports/top-clients", async (req, res) => {
   }
 });
 
+router.get("/reports/quote-funnel", async (req, res) => {
+  try {
+    const rows = await db
+      .select({
+        status: quotesTable.status,
+        count: sql<number>`count(*)`,
+        total_value: sql<number>`coalesce(sum(total::numeric), 0)`,
+      })
+      .from(quotesTable)
+      .groupBy(quotesTable.status);
+
+    const byStatus: Record<string, { count: number; value: number }> = {};
+    for (const r of rows) {
+      byStatus[r.status] = { count: Number(r.count), value: Number(r.total_value) };
+    }
+
+    const draft = byStatus.draft?.count ?? 0;
+    const sent = byStatus.sent?.count ?? 0;
+    const accepted = byStatus.accepted?.count ?? 0;
+    const rejected = byStatus.rejected?.count ?? 0;
+    const expired = byStatus.expired?.count ?? 0;
+    const total = draft + sent + accepted + rejected + expired;
+    const closed = accepted + rejected + expired;
+    const winRate = closed > 0 ? Math.round((accepted / closed) * 100) : null;
+
+    res.json({
+      by_status: byStatus,
+      totals: { draft, sent, accepted, rejected, expired, total },
+      win_rate_pct: winRate,
+      accepted_value: byStatus.accepted?.value ?? 0,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch quote funnel" });
+  }
+});
+
 router.get("/reports/invoice-summary", async (req, res) => {
   try {
     const rows = await db
