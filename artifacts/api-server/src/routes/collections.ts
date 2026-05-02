@@ -4,9 +4,10 @@ import {
   collectionsTable,
   collectionProductsTable,
   productsTable,
+  productImagesTable,
   insertCollectionSchema,
 } from "@workspace/db/schema";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -38,12 +39,19 @@ router.get("/collections/:id", async (req, res) => {
       .where(eq(collectionProductsTable.collectionId, collection.id))
       .orderBy(collectionProductsTable.displayOrder);
 
-    const products = cpRows.length > 0
-      ? await db.select().from(productsTable)
-          .where(eq(productsTable.isActive, true))
+    const productIds = cpRows.map((cp) => cp.productId);
+    const products = productIds.length > 0
+      ? await db.select().from(productsTable).where(eq(productsTable.isActive, true))
       : [];
 
-    const productMap = Object.fromEntries(products.map((p) => [p.id, p]));
+    // Attach primary images
+    const images = productIds.length > 0
+      ? await db.select().from(productImagesTable)
+          .where(and(inArray(productImagesTable.productId, productIds), eq(productImagesTable.isPrimary, true)))
+      : [];
+    const imageMap = Object.fromEntries(images.map((img) => [img.productId, img.url]));
+
+    const productMap = Object.fromEntries(products.map((p) => [p.id, { ...p, imageUrl: imageMap[p.id] ?? null }]));
     const orderedProducts = cpRows.map((cp) => productMap[cp.productId]).filter(Boolean);
 
     res.json({ ...collection, products: orderedProducts });

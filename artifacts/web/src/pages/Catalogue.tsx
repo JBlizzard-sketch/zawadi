@@ -113,12 +113,15 @@ export default function Catalogue() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {products.map((product: any) => (
               <Link key={product.id} href={`/catalogue/${product.id}`} className="block bg-card border border-card-border rounded-xl overflow-hidden hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 group" data-testid={`card-product-${product.id}`}>
-                  {/* Image placeholder */}
                   <div className="h-44 bg-gradient-to-br from-amber-50 to-stone-100 flex items-center justify-center relative overflow-hidden">
-                    <Package size={32} className="text-muted-foreground/20" />
+                    {product.images?.[0]?.url ? (
+                      <img src={product.images[0].url} alt={product.images[0].alt ?? product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <Package size={32} className="text-muted-foreground/20" />
+                    )}
                     {product.isFeatured && (
                       <div className="absolute top-2 right-2">
-                        <span className="inline-flex items-center gap-1 bg-primary text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 bg-primary text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full shadow-sm">
                           <Star size={9} fill="currentColor" /> Featured
                         </span>
                       </div>

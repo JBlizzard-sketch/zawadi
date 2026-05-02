@@ -1,9 +1,10 @@
 import { useParams, useLocation, Link } from "wouter";
-import { ArrowLeft, Package } from "lucide-react";
+import { ArrowLeft, Package, Gift } from "lucide-react";
 import { useGetCollection, getGetCollectionQueryKey } from "@workspace/api-client-react";
 import { formatKES } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import Layout from "@/components/layout/Layout";
 
 const OCCASION_LABELS: Record<string, string> = {
@@ -58,9 +59,24 @@ export default function CollectionDetail() {
           <Badge variant="secondary" className="mb-3">{OCCASION_LABELS[col.occasion] ?? col.occasion}</Badge>
           <h1 className="text-3xl font-serif font-semibold text-foreground mb-3" data-testid="text-collection-name">{col.name}</h1>
           {col.description && <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">{col.description}</p>}
-          <div className="flex items-center gap-4 mt-4">
-            <span className="text-sm font-bold text-primary">{formatKES(col.minPrice)} {col.maxPrice ? `— ${formatKES(col.maxPrice)}` : "+"}</span>
-            <span className="text-sm text-muted-foreground">{col.productCount} products</span>
+          <div className="flex items-center justify-between flex-wrap gap-4 mt-4">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-bold text-primary">{formatKES(col.minPrice)} {col.maxPrice ? `— ${formatKES(col.maxPrice)}` : "+"}</span>
+              <span className="text-sm text-muted-foreground">{col.productCount} products</span>
+            </div>
+            {(col.products ?? []).length > 0 && (
+              <Button
+                size="sm"
+                className="gap-1.5 shadow-sm"
+                onClick={() => {
+                  const ids = (col.products as any[]).map((p: any) => p.id).join(",");
+                  setLocation(`/hamper-builder?products=${ids}&name=${encodeURIComponent(col.name)}`);
+                }}
+                data-testid="button-build-hamper"
+              >
+                <Gift size={13} /> Build Hamper from Collection
+              </Button>
+            )}
           </div>
         </div>
 
@@ -75,8 +91,12 @@ export default function CollectionDetail() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {(col.products as any[]).map((product: any) => (
               <Link key={product.id} href={`/catalogue/${product.id}`} className="group block bg-card border border-card-border rounded-xl overflow-hidden hover:shadow-md transition-all duration-200 hover:-translate-y-0.5" data-testid={`card-product-${product.id}`}>
-                  <div className="h-36 bg-gradient-to-br from-amber-50 to-stone-100 flex items-center justify-center">
-                    <Package size={28} className="text-muted-foreground/20" />
+                  <div className="h-36 bg-gradient-to-br from-amber-50 to-stone-100 flex items-center justify-center overflow-hidden">
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <Package size={28} className="text-muted-foreground/20" />
+                    )}
                   </div>
                   <div className="p-3">
                     <p className="text-xs font-semibold text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors">{product.name}</p>

@@ -64,4 +64,22 @@ router.post("/invoices", async (req, res) => {
   }
 });
 
+router.put("/invoices/:id", async (req, res) => {
+  try {
+    const { status } = req.body;
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+    if (status) updateData.status = status;
+    if (status === "paid") updateData.paidAt = new Date();
+    const [updated] = await db.update(invoicesTable)
+      .set(updateData)
+      .where(eq(invoicesTable.id, req.params.id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Invoice not found" });
+    res.json(updated);
+  } catch (err) {
+    req.log.error(err);
+    res.status(400).json({ error: "Failed to update invoice", details: String(err) });
+  }
+});
+
 export default router;

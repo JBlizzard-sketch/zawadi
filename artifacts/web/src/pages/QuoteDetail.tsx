@@ -1,7 +1,7 @@
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Send, XCircle } from "lucide-react";
 import { useGetQuote, getGetQuoteQueryKey, useConvertQuoteToOrder } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, QUOTE_STATUS_COLORS } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,6 +12,18 @@ const QUOTE_STATUS_LABELS: Record<string, string> = {
   draft: "Draft", sent: "Sent", accepted: "Accepted", rejected: "Rejected", expired: "Expired",
 };
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+async function updateQuoteStatus(id: string, status: string) {
+  const res = await fetch(`${BASE}/api/quotes/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error("Failed to update quote status");
+  return res.json();
+}
+
 export default function QuoteDetail() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -21,10 +33,15 @@ export default function QuoteDetail() {
   const convertToOrder = useConvertQuoteToOrder();
   const q = quote as any;
 
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetQuoteQueryKey(id) });
+
+  const markSent = useMutation({ mutationFn: () => updateQuoteStatus(id, "sent"), onSuccess: invalidate });
+  const markRejected = useMutation({ mutationFn: () => updateQuoteStatus(id, "rejected"), onSuccess: invalidate });
+
   const handleConvert = () => {
     convertToOrder.mutate({ id }, {
       onSuccess: (order: any) => {
-        queryClient.invalidateQueries({ queryKey: getGetQuoteQueryKey(id) });
+        invalidate();
         setLocation(`/orders/${order.id}`);
       },
     });
@@ -54,7 +71,12 @@ export default function QuoteDetail() {
   }
 
   const items: any[] = q.items ?? [];
+  const isDraft = q.status === "draft";
+  const isSent = q.status === "sent";
   const canConvert = q.status === "sent" || q.status === "accepted" || q.status === "draft";
+  const canMarkSent = isDraft;
+  const canMarkRejected = isSent;
+  const busy = markSent.isPending || markRejected.isPending || convertToOrder.isPending;
 
   return (
     <Layout>
@@ -75,10 +97,45 @@ export default function QuoteDetail() {
                 <span>Valid until {formatDate(q.validUntil)}</span>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
               <StatusBadge label={QUOTE_STATUS_LABELS[q.status] ?? q.status} colorClass={QUOTE_STATUS_COLORS[q.status] ?? ""} />
-              {canConvert && (
-                <Button size="sm" onClick={handleConvert} disabled={convertToOrder.isPending} className="gap-2" data-testid="button-convert-to-order">
+
+              {canMarkSent && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => markSent.mutate()}
+                  disabled={busy}
+                  className="gap-1.5"
+                  data-testid="button-mark-sent"
+                >
+                  <Send size={13} />
+                  {markSent.isPending ? "Sending…" : "Mark as Sent"}
+                </Button>
+              )}
+
+              {canMarkRejected && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => markRejected.mutate()}
+                  disabled={busy}
+                  className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/5"
+                  data-testid="button-mark-rejected"
+                >
+                  <XCircle size={13} />
+                  {markRejected.isPending ? "Rejecting…" : "Reject"}
+                </Button>
+              )}
+
+              {canConvert && q.status !== "rejected" && (
+                <Button
+                  size="sm"
+                  onClick={handleConvert}
+                  disabled={busy}
+                  className="gap-2"
+                  data-testid="button-convert-to-order"
+                >
                   {convertToOrder.isPending ? "Converting..." : "Convert to Order"}
                   <ArrowRight size={14} />
                 </Button>

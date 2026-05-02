@@ -88,6 +88,24 @@ router.post("/quotes", async (req, res) => {
   }
 });
 
+router.put("/quotes/:id", async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+    if (status) updateData.status = status;
+    if (notes !== undefined) updateData.notes = notes;
+    const [updated] = await db.update(quotesTable)
+      .set(updateData)
+      .where(eq(quotesTable.id, req.params.id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Quote not found" });
+    res.json(updated);
+  } catch (err) {
+    req.log.error(err);
+    res.status(400).json({ error: "Failed to update quote", details: String(err) });
+  }
+});
+
 router.post("/quotes/:id/convert", async (req, res) => {
   try {
     const [quote] = await db.select().from(quotesTable).where(eq(quotesTable.id, req.params.id));

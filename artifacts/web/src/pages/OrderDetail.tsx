@@ -1,14 +1,56 @@
-import { useParams, useLocation, Link } from "wouter";
-import { ArrowLeft, Package, Users, AlertCircle } from "lucide-react";
+import { useParams, useLocation } from "wouter";
+import { ArrowLeft, Package, Users, AlertCircle, FileText } from "lucide-react";
 import { useGetOrder, getGetOrderQueryKey, useCancelOrder } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, formatDateTime, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
 import Layout from "@/components/layout/Layout";
 
 const STATUS_STEPS = ["pending", "confirmed", "in_production", "quality_check", "packaging", "dispatched", "delivered"];
+
+const NEXT_STATUS: Record<string, string> = {
+  pending: "confirmed",
+  confirmed: "in_production",
+  in_production: "quality_check",
+  quality_check: "packaging",
+  packaging: "dispatched",
+  dispatched: "delivered",
+};
+
+const NEXT_LABEL: Record<string, string> = {
+  pending: "Confirm Order",
+  confirmed: "Start Production",
+  in_production: "Quality Check",
+  quality_check: "Begin Packaging",
+  packaging: "Dispatch",
+  dispatched: "Mark Delivered",
+};
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+async function advanceOrderStatus(id: string, status: string) {
+  const res = await fetch(`${BASE}/api/orders/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error("Failed to update order");
+  return res.json();
+}
+
+async function generateInvoice(orderId: string) {
+  const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const res = await fetch(`${BASE}/api/invoices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ order_id: orderId, due_date: dueDate }),
+  });
+  if (!res.ok) throw new Error("Failed to generate invoice");
+  return res.json();
+}
 
 export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
@@ -18,15 +60,21 @@ export default function OrderDetail() {
   const { data: order, isLoading } = useGetOrder(id, { query: { enabled: !!id, queryKey: getGetOrderQueryKey(id) } });
   const cancelOrder = useCancelOrder();
 
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(id) });
+  const advanceStatus = useMutation({ mutationFn: (status: string) => advanceOrderStatus(id, status), onSuccess: invalidate });
+  const createInvoice = useMutation({
+    mutationFn: () => generateInvoice(id),
+    onSuccess: (inv: any) => {
+      invalidate();
+      setLocation(`/invoices/${inv.id}`);
+    },
+  });
+
   const o = order as any;
 
   const handleCancel = () => {
     if (!window.confirm("Cancel this order? This cannot be undone.")) return;
-    cancelOrder.mutate({ id }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(id) });
-      },
-    });
+    cancelOrder.mutate({ id }, { onSuccess: invalidate });
   };
 
   if (isLoading) {
@@ -53,6 +101,8 @@ export default function OrderDetail() {
   }
 
   const currentStep = STATUS_STEPS.indexOf(o.status);
+  const nextStatus = NEXT_STATUS[o.status];
+  const busy = advanceStatus.isPending || cancelOrder.isPending || createInvoice.isPending;
 
   return (
     <Layout>
@@ -68,11 +118,38 @@ export default function OrderDetail() {
               <h1 className="text-xl font-serif font-semibold text-foreground" data-testid="text-order-reference">{o.reference}</h1>
               <p className="text-sm text-muted-foreground mt-0.5">{formatDateTime(o.createdAt)}</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
               <StatusBadge label={ORDER_STATUS_LABELS[o.status] ?? o.status} colorClass={ORDER_STATUS_COLORS[o.status] ?? ""} />
+
+              {nextStatus && o.status !== "cancelled" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => advanceStatus.mutate(nextStatus)}
+                  disabled={busy}
+                  data-testid="button-advance-status"
+                >
+                  {advanceStatus.isPending ? "Updating…" : NEXT_LABEL[o.status]}
+                </Button>
+              )}
+
+              {(o.status === "confirmed" || o.status === "in_production" || o.status === "dispatched" || o.status === "delivered") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => createInvoice.mutate()}
+                  disabled={busy}
+                  className="gap-1.5"
+                  data-testid="button-generate-invoice"
+                >
+                  <FileText size={13} />
+                  {createInvoice.isPending ? "Generating…" : "Generate Invoice"}
+                </Button>
+              )}
+
               {o.status !== "cancelled" && o.status !== "delivered" && (
-                <Button size="sm" variant="destructive" onClick={handleCancel} disabled={cancelOrder.isPending} data-testid="button-cancel-order">
-                  {cancelOrder.isPending ? "Cancelling..." : "Cancel Order"}
+                <Button size="sm" variant="destructive" onClick={handleCancel} disabled={busy} data-testid="button-cancel-order">
+                  {cancelOrder.isPending ? "Cancelling..." : "Cancel"}
                 </Button>
               )}
             </div>
