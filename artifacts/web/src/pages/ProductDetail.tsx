@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Clock, MapPin, Tag, ShoppingCart, Gift, Star, Leaf, Pencil, X } from "lucide-react";
+import { ArrowLeft, Package, Clock, MapPin, Tag, ShoppingCart, Gift, Star, Leaf, Pencil, X, Plus, Trash2 } from "lucide-react";
 import { useGetProduct, getGetProductQueryKey, useListCategories, getListCategoriesQueryKey, useListSuppliers, getListSuppliersQueryKey } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES } from "@/lib/format";
@@ -22,6 +22,8 @@ const OCCASION_LABELS: Record<string, string> = {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+interface TierRow { min_qty: string; price_per_unit: string; }
+
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -29,6 +31,7 @@ export default function ProductDetail() {
 
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [tiers, setTiers] = useState<TierRow[]>([]);
   const [saveError, setSaveError] = useState("");
 
   const { data: product, isLoading } = useGetProduct(id, { query: { enabled: !!id, queryKey: getGetProductQueryKey(id) } });
@@ -69,7 +72,33 @@ export default function ProductDetail() {
       origin: p.origin ?? "",
       description: p.description ?? "",
     });
+    setTiers(
+      (p.bulkTiers ?? []).map((t: any) => ({
+        min_qty: String(t.min_qty ?? ""),
+        price_per_unit: String(t.price_per_unit ?? ""),
+      }))
+    );
     setShowEdit(true);
+  };
+
+  const addTier = () => setTiers(prev => [...prev, { min_qty: "", price_per_unit: "" }]);
+  const removeTier = (i: number) => setTiers(prev => prev.filter((_, idx) => idx !== i));
+  const updateTier = (i: number, field: keyof TierRow, value: string) =>
+    setTiers(prev => prev.map((t, idx) => idx === i ? { ...t, [field]: value } : t));
+
+  const handleSave = () => {
+    const validTiers = tiers
+      .filter(t => t.min_qty && t.price_per_unit)
+      .map(t => ({ min_qty: parseInt(t.min_qty, 10), price_per_unit: parseFloat(t.price_per_unit) }))
+      .sort((a, b) => a.min_qty - b.min_qty);
+
+    saveProduct.mutate({
+      ...editForm,
+      unitPrice: editForm.unitPrice,
+      moq: parseInt(editForm.moq) || 1,
+      leadTimeDays: parseInt(editForm.leadTimeDays) || 7,
+      bulkTiers: validTiers,
+    });
   };
 
   if (isLoading) {
@@ -210,7 +239,12 @@ export default function ProductDetail() {
             {/* Bulk Pricing Tiers */}
             {bulkTiers.length > 0 && (
               <div>
-                <p className="text-sm font-semibold text-foreground mb-3">Bulk Pricing</p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-foreground">Bulk Pricing</p>
+                  <button onClick={openEdit} className="text-xs text-primary hover:underline flex items-center gap-1">
+                    <Pencil size={10} /> Edit tiers
+                  </button>
+                </div>
                 <div className="border border-card-border rounded-xl overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/40">
@@ -295,7 +329,7 @@ export default function ProductDetail() {
 
       {/* Edit Product Modal */}
       {showEdit && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 bg-black/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 bg-black/40 backdrop-blur-sm">
           <div className="bg-card border border-card-border rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between rounded-t-xl">
               <h2 className="text-base font-serif font-semibold text-foreground">Edit Product</h2>
@@ -350,18 +384,73 @@ export default function ProductDetail() {
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                 />
               </div>
+
+              {/* Bulk Pricing Tiers */}
+              <div className="pt-2 border-t border-border">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Bulk Pricing Tiers</p>
+                  <button
+                    type="button"
+                    onClick={addTier}
+                    className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    data-testid="button-add-tier"
+                  >
+                    <Plus size={11} /> Add Tier
+                  </button>
+                </div>
+                {tiers.length === 0 ? (
+                  <p className="text-xs text-muted-foreground/70 italic">No volume discounts set. Click "Add Tier" to offer bulk pricing.</p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-[1fr_1fr_auto] gap-2 mb-1">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-1">Min. Qty</p>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-1">Price / Unit (KES)</p>
+                      <span />
+                    </div>
+                    {tiers.map((tier, i) => (
+                      <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center" data-testid={`tier-row-edit-${i}`}>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={tier.min_qty}
+                          onChange={e => updateTier(i, "min_qty", e.target.value)}
+                          placeholder="50"
+                          className="h-8 text-sm"
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={tier.price_per_unit}
+                          onChange={e => updateTier(i, "price_per_unit", e.target.value)}
+                          placeholder="1200"
+                          className="h-8 text-sm"
+                        />
+                        <button
+                          onClick={() => removeTier(i)}
+                          className="p-1.5 text-muted-foreground hover:text-red-600 transition-colors rounded"
+                          data-testid={`button-remove-tier-${i}`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                    {tiers.length > 0 && editForm.unitPrice && (
+                      <p className="text-[11px] text-muted-foreground/70 pt-1">
+                        Tiers are sorted by min. qty on save. Prices should be below the unit price of {formatKES(editForm.unitPrice)}.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {saveError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>}
             </div>
             <div className="sticky bottom-0 bg-card border-t border-border px-6 py-4 flex gap-3 justify-end rounded-b-xl">
               <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
               <Button
                 disabled={!editForm.name.trim() || !editForm.unitPrice || saveProduct.isPending}
-                onClick={() => saveProduct.mutate({
-                  ...editForm,
-                  unitPrice: editForm.unitPrice,
-                  moq: parseInt(editForm.moq) || 1,
-                  leadTimeDays: parseInt(editForm.leadTimeDays) || 7,
-                })}
+                onClick={handleSave}
               >
                 {saveProduct.isPending ? "Saving…" : "Save Changes"}
               </Button>
