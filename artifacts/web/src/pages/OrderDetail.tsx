@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Users, AlertCircle, FileText, Check } from "lucide-react";
+import { ArrowLeft, Package, Users, AlertCircle, FileText, Check, Building2, Printer, Clock } from "lucide-react";
 import { useGetOrder, getGetOrderQueryKey, useCancelOrder } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, formatDateTime, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/format";
@@ -30,6 +30,106 @@ const NEXT_LABEL: Record<string, string> = {
 };
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function PrintablePackingSlip({ o }: { o: any }) {
+  const items: any[] = o.items ?? [];
+  return (
+    <div id="print-packing-slip" className="hidden print:block font-sans text-[13px] text-gray-900 max-w-2xl mx-auto p-8">
+      <div className="flex justify-between items-start mb-8 border-b border-gray-200 pb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">ZAWADI</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Corporate Gifting Platform · Nairobi, Kenya</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xl font-bold text-gray-900">PACKING SLIP</p>
+          <p className="font-mono text-base font-semibold mt-1">{o.reference}</p>
+          <p className="text-xs text-gray-500 mt-1 capitalize">{ORDER_STATUS_LABELS[o.status] ?? o.status}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-6 mb-8 text-sm">
+        <div>
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Client</p>
+          <p className="font-semibold">{o.corporate_name ?? "—"}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Order Date</p>
+          <p className="font-medium">{formatDate(o.createdAt)}</p>
+        </div>
+        {o.deliveryDate && (
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Delivery Date</p>
+            <p className="font-medium">{formatDate(o.deliveryDate)}</p>
+          </div>
+        )}
+      </div>
+
+      {o.deliveryAddress && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-6">
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Delivery Address</p>
+          <p className="text-sm font-medium text-gray-800">{o.deliveryAddress}</p>
+        </div>
+      )}
+
+      <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Product</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Qty</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Unit Price</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Line Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item: any) => (
+              <tr key={item.id} className="border-t border-gray-100">
+                <td className="px-4 py-3">
+                  <p className="font-medium">{item.productName}</p>
+                  {item.brandedPackaging && <p className="text-xs text-gray-400 mt-0.5">✓ Branded packaging</p>}
+                  {item.personalisationText && <p className="text-xs text-gray-400 mt-0.5">Note: {item.personalisationText}</p>}
+                </td>
+                <td className="px-4 py-3 text-right">{item.quantity}</td>
+                <td className="px-4 py-3 text-right">{formatKES(item.unitPrice)}</td>
+                <td className="px-4 py-3 text-right font-medium">{formatKES(item.lineTotal)}</td>
+              </tr>
+            ))}
+            <tr className="border-t border-gray-200 bg-gray-50">
+              <td colSpan={3} className="px-4 py-2.5 text-right text-xs text-gray-500">Subtotal (excl. VAT)</td>
+              <td className="px-4 py-2.5 text-right font-medium">{formatKES(o.subtotal)}</td>
+            </tr>
+            <tr className="border-t border-gray-100 bg-gray-50">
+              <td colSpan={3} className="px-4 py-2.5 text-right text-xs text-gray-500">VAT @ 16% (KRA)</td>
+              <td className="px-4 py-2.5 text-right font-medium">{formatKES(o.vat)}</td>
+            </tr>
+            <tr className="border-t-2 border-gray-300 bg-gray-50">
+              <td colSpan={3} className="px-4 py-3 text-right font-bold">Total</td>
+              <td className="px-4 py-3 text-right font-bold text-lg">{formatKES(o.total)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {o.recipientCount > 0 && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-6">
+          <p className="text-sm font-semibold text-gray-700">Recipients: <span className="font-normal">{o.recipientCount} individual gift recipient{o.recipientCount !== 1 ? "s" : ""}</span></p>
+        </div>
+      )}
+
+      {o.notes && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-6">
+          <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">Special Instructions</p>
+          <p className="text-sm text-stone-700">{o.notes}</p>
+        </div>
+      )}
+
+      <p className="text-[11px] text-gray-400 text-center mt-8 border-t border-gray-100 pt-4">
+        {o.reference} · Zawadi Corporate Gifting Platform · Nairobi, Kenya
+        <br />Printed {new Date().toLocaleDateString("en-KE", { year: "numeric", month: "long", day: "numeric" })} · All products are 100% Kenyan-made.
+      </p>
+    </div>
+  );
+}
 
 async function advanceOrderStatus(id: string, status: string) {
   const res = await fetch(`${BASE}/api/orders/${id}`, {
@@ -106,7 +206,10 @@ export default function OrderDetail() {
 
   return (
     <Layout>
-      <div className="p-8 max-w-4xl mx-auto">
+      {/* Hidden printable packing slip */}
+      {o && <PrintablePackingSlip o={o} />}
+
+      <div className="p-8 max-w-4xl mx-auto print:hidden">
         <button onClick={() => setLocation("/orders")} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors" data-testid="button-back">
           <ArrowLeft size={16} /> Back to Orders
         </button>
@@ -116,36 +219,38 @@ export default function OrderDetail() {
           <div className="flex items-start justify-between flex-wrap gap-4">
             <div>
               <h1 className="text-xl font-serif font-semibold text-foreground" data-testid="text-order-reference">{o.reference}</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">{formatDateTime(o.createdAt)}</p>
+              {o.corporate_name && (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Building2 size={12} className="text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">{o.corporate_name}</p>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">{formatDateTime(o.createdAt)}</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <StatusBadge label={ORDER_STATUS_LABELS[o.status] ?? o.status} colorClass={ORDER_STATUS_COLORS[o.status] ?? ""} />
 
               {nextStatus && o.status !== "cancelled" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => advanceStatus.mutate(nextStatus)}
-                  disabled={busy}
-                  data-testid="button-advance-status"
-                >
+                <Button size="sm" variant="outline" onClick={() => advanceStatus.mutate(nextStatus)} disabled={busy} data-testid="button-advance-status">
                   {advanceStatus.isPending ? "Updating…" : NEXT_LABEL[o.status]}
                 </Button>
               )}
 
-              {(o.status === "confirmed" || o.status === "in_production" || o.status === "dispatched" || o.status === "delivered") && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => createInvoice.mutate()}
-                  disabled={busy}
-                  className="gap-1.5"
-                  data-testid="button-generate-invoice"
-                >
+              {o.invoice ? (
+                <Button size="sm" variant="outline" onClick={() => setLocation(`/invoices/${o.invoice.id}`)} className="gap-1.5 text-green-700 border-green-200 hover:bg-green-50" data-testid="button-view-invoice">
+                  <FileText size={13} />
+                  {o.invoice.invoiceNumber}
+                </Button>
+              ) : (o.status === "confirmed" || o.status === "in_production" || o.status === "dispatched" || o.status === "delivered") && (
+                <Button size="sm" variant="outline" onClick={() => createInvoice.mutate()} disabled={busy} className="gap-1.5" data-testid="button-generate-invoice">
                   <FileText size={13} />
                   {createInvoice.isPending ? "Generating…" : "Generate Invoice"}
                 </Button>
               )}
+
+              <Button size="sm" variant="outline" onClick={() => window.print()} className="gap-1.5" data-testid="button-print-packing-slip">
+                <Printer size={13} /> Packing Slip
+              </Button>
 
               {o.status !== "cancelled" && o.status !== "delivered" && (
                 <Button size="sm" variant="destructive" onClick={handleCancel} disabled={busy} data-testid="button-cancel-order">
@@ -288,6 +393,33 @@ export default function OrderDetail() {
               <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-4">
                 <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1.5 flex items-center gap-1"><AlertCircle size={12} /> Notes</p>
                 <p className="text-sm text-stone-700">{o.notes}</p>
+              </div>
+            )}
+
+            {/* Activity Timeline */}
+            {((o.statusLog as any[])?.length > 0) && (
+              <div className="bg-card border border-card-border rounded-xl p-5 shadow-sm">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4 flex items-center gap-1.5">
+                  <Clock size={12} /> Activity
+                </p>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-1.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-foreground">Order Created</p>
+                      <p className="text-[11px] text-muted-foreground">{formatDateTime(o.createdAt)}</p>
+                    </div>
+                  </div>
+                  {(o.statusLog as any[]).map((entry: any, i: number) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs font-medium text-foreground">→ {ORDER_STATUS_LABELS[entry.status] ?? entry.status}</p>
+                        <p className="text-[11px] text-muted-foreground">{formatDateTime(entry.at)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

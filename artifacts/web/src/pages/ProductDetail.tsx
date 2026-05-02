@@ -1,10 +1,14 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Clock, MapPin, Tag, ShoppingCart, Gift, Star, Leaf } from "lucide-react";
-import { useGetProduct, getGetProductQueryKey } from "@workspace/api-client-react";
+import { ArrowLeft, Package, Clock, MapPin, Tag, ShoppingCart, Gift, Star, Leaf, Pencil, X } from "lucide-react";
+import { useGetProduct, getGetProductQueryKey, useListCategories, getListCategoriesQueryKey, useListSuppliers, getListSuppliersQueryKey } from "@workspace/api-client-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Layout from "@/components/layout/Layout";
 
 const OCCASION_LABELS: Record<string, string> = {
@@ -16,11 +20,57 @@ const OCCASION_LABELS: Record<string, string> = {
   custom: "Custom",
 };
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+
+  const [showEdit, setShowEdit] = useState(false);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState("");
 
   const { data: product, isLoading } = useGetProduct(id, { query: { enabled: !!id, queryKey: getGetProductQueryKey(id) } });
+  const { data: categories } = useListCategories({ query: { queryKey: getListCategoriesQueryKey(), enabled: showEdit } });
+  const { data: suppliersData } = useListSuppliers(undefined, { query: { queryKey: getListSuppliersQueryKey(), enabled: showEdit } });
+
+  const categoryList = (categories as any[]) ?? [];
+  const supplierList = (suppliersData as any[]) ?? [];
+
+  const saveProduct = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const res = await fetch(`${BASE}/api/products/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "Failed to save"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getGetProductQueryKey(id) });
+      setShowEdit(false);
+    },
+    onError: (e: any) => setSaveError(e.message ?? "Something went wrong."),
+  });
+
+  const openEdit = () => {
+    if (!product) return;
+    const p = product as any;
+    setSaveError("");
+    setEditForm({
+      name: p.name ?? "",
+      supplierId: p.supplierId ?? p.supplier?.id ?? "",
+      categoryId: p.categoryId ?? p.category?.id ?? "",
+      unitPrice: p.unitPrice ?? "",
+      moq: String(p.moq ?? 1),
+      leadTimeDays: String(p.leadTimeDays ?? 7),
+      origin: p.origin ?? "",
+      description: p.description ?? "",
+    });
+    setShowEdit(true);
+  };
 
   if (isLoading) {
     return (
@@ -60,9 +110,14 @@ export default function ProductDetail() {
   return (
     <Layout>
       <div className="p-8 max-w-5xl mx-auto">
-        <button onClick={() => setLocation("/catalogue")} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors" data-testid="button-back">
-          <ArrowLeft size={16} /> Back to Catalogue
-        </button>
+        <div className="flex items-center justify-between mb-6">
+          <button onClick={() => setLocation("/catalogue")} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="button-back">
+            <ArrowLeft size={16} /> Back to Catalogue
+          </button>
+          <Button size="sm" variant="outline" onClick={openEdit} className="gap-1.5" data-testid="button-edit-product">
+            <Pencil size={13} /> Edit Product
+          </Button>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           {/* Image */}
@@ -237,6 +292,83 @@ export default function ProductDetail() {
           </div>
         </div>
       </div>
+
+      {/* Edit Product Modal */}
+      {showEdit && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 bg-black/40 backdrop-blur-sm">
+          <div className="bg-card border border-card-border rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between rounded-t-xl">
+              <h2 className="text-base font-serif font-semibold text-foreground">Edit Product</h2>
+              <button onClick={() => setShowEdit(false)} className="text-muted-foreground hover:text-foreground transition-colors"><X size={18} /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Product Name *</label>
+                <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} placeholder="Handwoven Sisal Basket" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Supplier</label>
+                  <Select value={editForm.supplierId} onValueChange={v => setEditForm(f => ({ ...f, supplierId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
+                    <SelectContent>{supplierList.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Category</label>
+                  <Select value={editForm.categoryId} onValueChange={v => setEditForm(f => ({ ...f, categoryId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                    <SelectContent>{categoryList.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unit Price (KES) *</label>
+                  <Input type="number" min="0" step="0.01" value={editForm.unitPrice} onChange={e => setEditForm(f => ({ ...f, unitPrice: e.target.value }))} placeholder="1500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Min. Order (MOQ)</label>
+                  <Input type="number" min="1" value={editForm.moq} onChange={e => setEditForm(f => ({ ...f, moq: e.target.value }))} placeholder="10" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Lead Time (days)</label>
+                  <Input type="number" min="1" value={editForm.leadTimeDays} onChange={e => setEditForm(f => ({ ...f, leadTimeDays: e.target.value }))} placeholder="7" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Origin / County</label>
+                <Input value={editForm.origin} onChange={e => setEditForm(f => ({ ...f, origin: e.target.value }))} placeholder="Murang'a, Kenya" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Description</label>
+                <textarea
+                  rows={3}
+                  value={editForm.description}
+                  onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Describe this product…"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+              {saveError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>}
+            </div>
+            <div className="sticky bottom-0 bg-card border-t border-border px-6 py-4 flex gap-3 justify-end rounded-b-xl">
+              <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
+              <Button
+                disabled={!editForm.name.trim() || !editForm.unitPrice || saveProduct.isPending}
+                onClick={() => saveProduct.mutate({
+                  ...editForm,
+                  unitPrice: editForm.unitPrice,
+                  moq: parseInt(editForm.moq) || 1,
+                  leadTimeDays: parseInt(editForm.leadTimeDays) || 7,
+                })}
+              >
+                {saveProduct.isPending ? "Saving…" : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

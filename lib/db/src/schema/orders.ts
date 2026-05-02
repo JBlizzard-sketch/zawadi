@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, integer, numeric, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, integer, numeric, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { corporatesTable } from "./corporates";
@@ -22,6 +22,7 @@ export const ordersTable = pgTable("orders", {
   notes: text("notes"),
   recipientCount: integer("recipient_count").notNull().default(0),
   quoteId: uuid("quote_id"),
+  statusLog: jsonb("status_log").default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

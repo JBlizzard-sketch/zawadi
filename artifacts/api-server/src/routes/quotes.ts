@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { quotesTable, productsTable, ordersTable, orderItemsTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { quotesTable, productsTable, ordersTable, orderItemsTable, corporatesTable } from "@workspace/db/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 const VAT_RATE = 0.16; // Kenya VAT 16%
@@ -17,7 +17,15 @@ router.get("/quotes", async (req, res) => {
     const quotes = await db.select().from(quotesTable)
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(quotesTable.createdAt);
-    res.json(quotes);
+
+    // Enrich with corporate names
+    const corpIds = [...new Set(quotes.map((q) => q.corporateId).filter(Boolean))] as string[];
+    const corps = corpIds.length
+      ? await db.select({ id: corporatesTable.id, name: corporatesTable.name }).from(corporatesTable).where(inArray(corporatesTable.id, corpIds))
+      : [];
+    const corpMap = Object.fromEntries(corps.map((c) => [c.id, c.name]));
+
+    res.json(quotes.map((q) => ({ ...q, corporate_name: q.corporateId ? (corpMap[q.corporateId] ?? null) : null })));
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch quotes" });
@@ -28,7 +36,14 @@ router.get("/quotes/:id", async (req, res) => {
   try {
     const [quote] = await db.select().from(quotesTable).where(eq(quotesTable.id, req.params.id));
     if (!quote) return res.status(404).json({ error: "Quote not found" });
-    res.json(quote);
+
+    let corporateName: string | null = null;
+    if (quote.corporateId) {
+      const [corp] = await db.select({ name: corporatesTable.name }).from(corporatesTable).where(eq(corporatesTable.id, quote.corporateId));
+      corporateName = corp?.name ?? null;
+    }
+
+    res.json({ ...quote, corporate_name: corporateName });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch quote" });
@@ -70,7 +85,10 @@ router.post("/quotes", async (req, res) => {
     const total = subtotal + vat;
     const validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
+    const reference = `QT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+
     const [quote] = await db.insert(quotesTable).values({
+      reference,
       corporateId: corporate_id ?? null,
       status: "draft",
       items: quoteItems as any,

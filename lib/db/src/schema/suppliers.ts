@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, boolean, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -18,6 +18,10 @@ export const suppliersTable = pgTable("suppliers", {
   isVerified: boolean("is_verified").notNull().default(false),
   onboardingStatus: text("onboarding_status", { enum: onboardingStatusEnum }).notNull().default("pending"),
   tags: text("tags").array().notNull().default([]),
+  womenLed: boolean("women_led").notNull().default(false),
+  artisanCount: integer("artisan_count"),
+  certifications: text("certifications").array().notNull().default([]),
+  esgNotes: text("esg_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

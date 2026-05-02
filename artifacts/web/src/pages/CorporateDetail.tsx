@@ -1,18 +1,46 @@
+import { useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
-import { ArrowLeft, Building2, Mail, Phone, FileText, ShoppingCart } from "lucide-react";
-import { useGetCorporate, getGetCorporateQueryKey, useGetCorporateDashboard, getGetCorporateDashboardQueryKey } from "@workspace/api-client-react";
-import { formatKES, formatDate, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, TIER_COLORS } from "@/lib/format";
+import { ArrowLeft, Building2, Mail, Phone, FileText, ShoppingCart, Receipt, ChevronRight, Pencil, X } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  useGetCorporate, getGetCorporateQueryKey,
+  useGetCorporateDashboard, getGetCorporateDashboardQueryKey,
+  useListQuotes, getListQuotesQueryKey,
+  useListInvoices, getListInvoicesQueryKey,
+} from "@workspace/api-client-react";
+import { formatKES, formatDate, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, QUOTE_STATUS_COLORS, INVOICE_STATUS_COLORS, TIER_COLORS } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import Layout from "@/components/layout/Layout";
 
+const QUOTE_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft", sent: "Sent", accepted: "Accepted", rejected: "Rejected", expired: "Expired",
+};
+const INVOICE_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft", sent: "Sent", paid: "Paid", overdue: "Overdue", cancelled: "Cancelled",
+};
+
+const TIERS = ["standard", "premium", "enterprise"];
 const TIER_LABELS: Record<string, string> = { standard: "Standard", premium: "Premium", enterprise: "Enterprise" };
 const PAYMENT_LABELS: Record<string, string> = { prepaid: "Prepaid", net_15: "Net 15", net_30: "Net 30", net_60: "Net 60" };
+const INDUSTRIES = ["Banking & Finance", "Technology", "Legal & Professional", "Consulting", "NGO & Development", "Healthcare", "FMCG & Retail", "Real Estate", "Education", "Media & PR", "Logistics", "Telecommunications", "Other"];
+const PAYMENT_TERMS = ["net_7", "net_14", "net_30", "net_60"];
+const PAYMENT_TERM_LABELS: Record<string, string> = { net_7: "Net 7", net_14: "Net 14", net_30: "Net 30", net_60: "Net 60" };
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function CorporateDetail() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+
+  const [showEdit, setShowEdit] = useState(false);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState("");
 
   const { data: corporate, isLoading: corpLoading } = useGetCorporate(id, { query: { enabled: !!id, queryKey: getGetCorporateQueryKey(id) } });
   const { data: dashboard, isLoading: dashLoading } = useGetCorporateDashboard(id, { query: { enabled: !!id, queryKey: getGetCorporateDashboardQueryKey(id) } });
@@ -24,6 +52,46 @@ export default function CorporateDetail() {
     "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr", "05": "May", "06": "Jun",
     "07": "Jul", "08": "Aug", "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec",
   };
+
+  const saveCorporate = useMutation({
+    mutationFn: async (body: Record<string, string>) => {
+      const res = await fetch(`${BASE}/api/corporates/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "Failed to save"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getGetCorporateQueryKey(id) });
+      setShowEdit(false);
+    },
+    onError: (e: any) => setSaveError(e.message ?? "Something went wrong."),
+  });
+
+  const openEdit = () => {
+    setSaveError("");
+    setEditForm({
+      name: c?.name ?? "",
+      email: c?.email ?? "",
+      phone: c?.phone ?? "",
+      industry: c?.industry ?? "",
+      tier: c?.tier ?? "standard",
+      kraPin: c?.kraPin ?? "",
+      city: c?.city ?? "",
+      paymentTerms: c?.paymentTerms ?? "net_30",
+      accountManagerName: c?.accountManagerName ?? "",
+    });
+    setShowEdit(true);
+  };
+
+  const quoteParams = { corporate_id: id };
+  const invoiceParams = { corporate_id: id };
+  const { data: quotesData, isLoading: quotesLoading } = useListQuotes(quoteParams, { query: { enabled: !!id, queryKey: getListQuotesQueryKey(quoteParams) } });
+  const { data: invoicesData, isLoading: invoicesLoading } = useListInvoices(invoiceParams, { query: { enabled: !!id, queryKey: getListInvoicesQueryKey(invoiceParams) } });
+  const quoteList = (quotesData as any[]) ?? [];
+  const invoiceList = (invoicesData as any[]) ?? [];
 
   const spendData = (d?.spend_by_month ?? []).map((r: { month: string; spend: number }) => ({
     month: MONTH_LABELS[r.month?.split("-")[1]] ?? r.month,
@@ -80,6 +148,9 @@ export default function CorporateDetail() {
             </div>
             <div className="flex flex-col gap-3 items-end">
               <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={openEdit} className="gap-1.5" data-testid="button-edit-corporate">
+                  <Pencil size={13} /> Edit
+                </Button>
                 <Link
                   href={`/quotes/new?corporateId=${c.id}&corporateName=${encodeURIComponent(c.name)}`}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
@@ -188,7 +259,170 @@ export default function CorporateDetail() {
             )}
           </div>
         </div>
+
+        {/* Quotes Panel */}
+        <div className="mt-6 bg-card border border-card-border rounded-xl overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText size={15} className="text-muted-foreground" />
+              <p className="text-sm font-semibold text-foreground">Quotes</p>
+            </div>
+            <Link href={`/quotes/new?corporateId=${c.id}&corporateName=${encodeURIComponent(c.name)}`} className="text-xs font-medium text-primary hover:underline" data-testid="link-new-quote-bottom">
+              + New Quote
+            </Link>
+          </div>
+          {quotesLoading ? (
+            <div className="p-4 space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
+          ) : quoteList.length === 0 ? (
+            <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">No quotes yet</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground">Reference</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground hidden sm:table-cell">Issued</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground hidden sm:table-cell">Valid Until</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground">Status</th>
+                  <th className="text-right px-5 py-2.5 text-xs font-semibold text-muted-foreground">Total</th>
+                  <th className="px-3 py-2.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {quoteList.map((q: any) => (
+                  <tr key={q.id} className="hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => setLocation(`/quotes/${q.id}`)}>
+                    <td className="px-5 py-3 font-mono text-xs font-semibold text-foreground">{q.reference ?? `QT-${q.id.slice(0, 6)}`}</td>
+                    <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">{formatDate(q.createdAt)}</td>
+                    <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">{q.validUntil ? formatDate(q.validUntil) : "—"}</td>
+                    <td className="px-5 py-3">
+                      <StatusBadge label={QUOTE_STATUS_LABELS[q.status] ?? q.status} colorClass={QUOTE_STATUS_COLORS[q.status] ?? ""} />
+                    </td>
+                    <td className="px-5 py-3 text-right font-semibold text-foreground">{formatKES(q.total)}</td>
+                    <td className="px-3 py-3 text-muted-foreground"><ChevronRight size={14} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Invoices Panel */}
+        <div className="mt-6 mb-2 bg-card border border-card-border rounded-xl overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+            <Receipt size={15} className="text-muted-foreground" />
+            <p className="text-sm font-semibold text-foreground">Invoices</p>
+          </div>
+          {invoicesLoading ? (
+            <div className="p-4 space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
+          ) : invoiceList.length === 0 ? (
+            <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">No invoices yet</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground">Invoice No.</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground hidden sm:table-cell">Issued</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground hidden sm:table-cell">Due</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground">Status</th>
+                  <th className="text-right px-5 py-2.5 text-xs font-semibold text-muted-foreground">Total</th>
+                  <th className="px-3 py-2.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {invoiceList.map((inv: any) => (
+                  <tr key={inv.id} className="hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => setLocation(`/invoices/${inv.id}`)}>
+                    <td className="px-5 py-3 font-mono text-xs font-semibold text-foreground">{inv.invoiceNumber ?? inv.reference ?? "—"}</td>
+                    <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">{formatDate(inv.createdAt)}</td>
+                    <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">{inv.dueDate ? formatDate(inv.dueDate) : "—"}</td>
+                    <td className="px-5 py-3">
+                      <StatusBadge label={INVOICE_STATUS_LABELS[inv.status] ?? inv.status} colorClass={INVOICE_STATUS_COLORS[inv.status] ?? ""} />
+                    </td>
+                    <td className="px-5 py-3 text-right font-semibold text-foreground">{formatKES(inv.totalAmount ?? inv.total)}</td>
+                    <td className="px-3 py-3 text-muted-foreground"><ChevronRight size={14} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
       </div>
+
+      {/* Edit Corporate Modal */}
+      {showEdit && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 bg-black/40 backdrop-blur-sm">
+          <div className="bg-card border border-card-border rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between rounded-t-xl">
+              <h2 className="text-base font-serif font-semibold text-foreground">Edit Client</h2>
+              <button onClick={() => setShowEdit(false)} className="text-muted-foreground hover:text-foreground transition-colors"><X size={18} /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Company Name *</label>
+                <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} placeholder="Acacia Holdings Ltd" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
+                  <Input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} placeholder="info@acacia.co.ke" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Phone</label>
+                  <Input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="+254 700 000 000" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Industry</label>
+                  <Select value={editForm.industry} onValueChange={v => setEditForm(f => ({ ...f, industry: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select industry" /></SelectTrigger>
+                    <SelectContent>{INDUSTRIES.map(i => <SelectItem key={i} value={i}>{i}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Tier</label>
+                  <Select value={editForm.tier} onValueChange={v => setEditForm(f => ({ ...f, tier: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{TIERS.map(t => <SelectItem key={t} value={t}>{TIER_LABELS[t]}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">KRA PIN</label>
+                  <Input value={editForm.kraPin} onChange={e => setEditForm(f => ({ ...f, kraPin: e.target.value }))} placeholder="P051234567A" className="font-mono" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">City</label>
+                  <Input value={editForm.city} onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))} placeholder="Nairobi" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Payment Terms</label>
+                  <Select value={editForm.paymentTerms} onValueChange={v => setEditForm(f => ({ ...f, paymentTerms: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{PAYMENT_TERM_LABELS[t]}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Account Manager</label>
+                  <Input value={editForm.accountManagerName} onChange={e => setEditForm(f => ({ ...f, accountManagerName: e.target.value }))} placeholder="Jane Wambui" />
+                </div>
+              </div>
+              {saveError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>}
+            </div>
+            <div className="sticky bottom-0 bg-card border-t border-border px-6 py-4 flex gap-3 justify-end rounded-b-xl">
+              <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
+              <Button
+                disabled={!editForm.name.trim() || saveCorporate.isPending}
+                onClick={() => saveCorporate.mutate(editForm)}
+              >
+                {saveCorporate.isPending ? "Saving…" : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

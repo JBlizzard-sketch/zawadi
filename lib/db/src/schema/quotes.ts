@@ -7,6 +7,7 @@ export const quoteStatusEnum = ["draft", "sent", "accepted", "rejected", "expire
 
 export const quotesTable = pgTable("quotes", {
   id: uuid("id").primaryKey().defaultRandom(),
+  reference: text("reference"),
   corporateId: uuid("corporate_id").references(() => corporatesTable.id),
   status: text("status", { enum: quoteStatusEnum }).notNull().default("draft"),
   items: jsonb("items").notNull().default("[]"),

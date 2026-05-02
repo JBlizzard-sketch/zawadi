@@ -11,6 +11,7 @@ import ordersRouter from "./orders";
 import recipientsRouter from "./recipients";
 import invoicesRouter from "./invoices";
 import dashboardRouter from "./dashboard";
+import searchRouter from "./search";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(ordersRouter);
 router.use(recipientsRouter);
 router.use(invoicesRouter);
 router.use(dashboardRouter);
+router.use(searchRouter);
 
 export default router;

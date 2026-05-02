@@ -189,8 +189,8 @@ export default function Quotes() {
                     data-testid={`row-quote-${quote.id}`}
                   >
                     <td className="px-5 py-3">
-                      <p className="font-semibold text-foreground text-xs">{quote.id.slice(0, 8).toUpperCase()}</p>
-                      <p className="text-xs text-muted-foreground">{(quote.items as any[])?.length ?? 0} line item{(quote.items as any[])?.length !== 1 ? "s" : ""}</p>
+                      <p className="font-semibold text-foreground text-sm font-mono">{quote.reference ?? quote.id.slice(0, 8).toUpperCase()}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{quote.corporate_name ?? "—"}</p>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(quote.createdAt)}</td>
                     <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(quote.validUntil)}</td>

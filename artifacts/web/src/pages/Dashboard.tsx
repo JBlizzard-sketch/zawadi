@@ -1,12 +1,14 @@
-import { useState } from "react";
 import { Link } from "wouter";
-import { ArrowUpRight, TrendingUp, Package, Building2, Layers, ShoppingCart, Clock } from "lucide-react";
+import { ArrowUpRight, TrendingUp, Package, Building2, Layers, ShoppingCart, Clock, AlertTriangle, Leaf, MapPin } from "lucide-react";
 import { useGetDashboardStats, getGetDashboardStatsQueryKey, useGetRecentOrders, getGetRecentOrdersQueryKey, useGetTopProducts, getGetTopProductsQueryKey } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { formatKES, formatDate, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import Layout from "@/components/layout/Layout";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function StatCard({ label, value, sub, icon: Icon, accent }: { label: string; value: string; sub?: string; icon: React.ElementType; accent?: string }) {
   return (
@@ -34,20 +36,71 @@ export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats({ query: { queryKey: getGetDashboardStatsQueryKey() } });
   const { data: recentOrders, isLoading: ordersLoading } = useGetRecentOrders(undefined, { query: { queryKey: getGetRecentOrdersQueryKey() } });
   const { data: topProducts, isLoading: topLoading } = useGetTopProducts(undefined, { query: { queryKey: getGetTopProductsQueryKey() } });
+  const { data: alerts } = useQuery<any>({
+    queryKey: ["dashboard-alerts"],
+    queryFn: () => fetch(`${BASE}/api/dashboard/alerts`).then((r) => r.json()),
+    staleTime: 60_000,
+  });
 
   const revenueData = (stats?.revenue_by_month ?? []).map((r: { month: string; revenue: number }) => ({
     month: MONTH_LABELS[r.month?.split("-")[1]] ?? r.month,
     revenue: r.revenue,
   }));
 
+  const hasAlerts = alerts && (
+    alerts.overdue_invoices?.count > 0 ||
+    alerts.expiring_quotes?.count > 0 ||
+    alerts.stuck_pending_orders?.count > 0
+  );
+
   return (
     <Layout>
       <div className="p-8 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-2xl font-serif font-semibold text-foreground">Overview</h1>
           <p className="text-sm text-muted-foreground mt-1">Live platform metrics and recent activity</p>
         </div>
+
+        {/* Alerts Strip */}
+        {hasAlerts && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-wrap gap-3 items-center" data-testid="alerts-strip">
+            <div className="flex items-center gap-2 text-amber-800">
+              <AlertTriangle size={15} className="text-amber-600 flex-shrink-0" />
+              <span className="text-xs font-semibold uppercase tracking-wide text-amber-700">Action required</span>
+            </div>
+            <div className="flex flex-wrap gap-2 flex-1">
+              {alerts.overdue_invoices?.count > 0 && (
+                <Link
+                  href="/invoices?status=sent"
+                  className="inline-flex items-center gap-1.5 bg-red-100 border border-red-200 text-red-800 text-xs font-medium px-3 py-1.5 rounded-full hover:bg-red-200 transition-colors"
+                  data-testid="alert-overdue-invoices"
+                >
+                  <span className="font-bold">{alerts.overdue_invoices.count}</span> overdue invoice{alerts.overdue_invoices.count !== 1 ? "s" : ""}
+                  {alerts.overdue_invoices.total_kes > 0 && <span className="text-red-600">· {formatKES(alerts.overdue_invoices.total_kes)}</span>}
+                </Link>
+              )}
+              {alerts.expiring_quotes?.count > 0 && (
+                <Link
+                  href="/quotes"
+                  className="inline-flex items-center gap-1.5 bg-orange-100 border border-orange-200 text-orange-800 text-xs font-medium px-3 py-1.5 rounded-full hover:bg-orange-200 transition-colors"
+                  data-testid="alert-expiring-quotes"
+                >
+                  <span className="font-bold">{alerts.expiring_quotes.count}</span> quote{alerts.expiring_quotes.count !== 1 ? "s" : ""} expiring within 7 days
+                </Link>
+              )}
+              {alerts.stuck_pending_orders?.count > 0 && (
+                <Link
+                  href="/orders?status=pending"
+                  className="inline-flex items-center gap-1.5 bg-yellow-100 border border-yellow-200 text-yellow-800 text-xs font-medium px-3 py-1.5 rounded-full hover:bg-yellow-200 transition-colors"
+                  data-testid="alert-stuck-orders"
+                >
+                  <span className="font-bold">{alerts.stuck_pending_orders.count}</span> pending order{alerts.stuck_pending_orders.count !== 1 ? "s" : ""} stalled &gt;7 days
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Stat Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -109,7 +162,7 @@ export default function Dashboard() {
         </div>
 
         {/* Recent Orders + Top Products */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
           {/* Recent Orders */}
           <div className="lg:col-span-3 bg-card border border-card-border rounded-xl shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-card-border">
@@ -187,6 +240,46 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+        </div>
+        {/* ESG Impact Panel */}
+        <div className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-800 rounded-xl p-6 text-white shadow-sm">
+          <div className="flex items-center gap-2 mb-5">
+            <div className="w-7 h-7 rounded-lg bg-green-500/20 flex items-center justify-center">
+              <Leaf size={14} className="text-green-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Kenyan Artisan Impact</p>
+              <p className="text-xs text-stone-400">Live metrics from your gifting activity</p>
+            </div>
+            <Link href="/suppliers" className="ml-auto text-xs text-stone-400 hover:text-white flex items-center gap-1 transition-colors">
+              View suppliers <ArrowUpRight size={11} />
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white/5 rounded-xl p-4 text-center border border-white/10">
+              <p className="text-2xl font-bold text-white tabular-nums">{alerts?.esg?.verified_suppliers ?? "—"}</p>
+              <p className="text-xs text-stone-400 mt-1">Verified Suppliers</p>
+              <p className="text-[10px] text-stone-500 mt-0.5">Kenyan artisans</p>
+            </div>
+            <div className="bg-white/5 rounded-xl p-4 text-center border border-white/10">
+              <p className="text-2xl font-bold text-white tabular-nums">{alerts?.esg?.counties_covered ?? "—"}</p>
+              <p className="text-xs text-stone-400 mt-1">Counties Covered</p>
+              <p className="text-[10px] text-stone-500 mt-0.5 flex items-center justify-center gap-0.5"><MapPin size={9} />Across Kenya</p>
+            </div>
+            <div className="bg-white/5 rounded-xl p-4 text-center border border-white/10">
+              <p className="text-2xl font-bold text-green-400 tabular-nums">100%</p>
+              <p className="text-xs text-stone-400 mt-1">Locally Sourced</p>
+              <p className="text-[10px] text-stone-500 mt-0.5">Made in Kenya</p>
+            </div>
+            <div className="bg-white/5 rounded-xl p-4 text-center border border-white/10">
+              <p className="text-2xl font-bold text-amber-400 tabular-nums">{formatKES(stats?.total_revenue ?? 0).replace("KES ", "")}</p>
+              <p className="text-xs text-stone-400 mt-1">Artisan Revenue</p>
+              <p className="text-[10px] text-stone-500 mt-0.5">Lifetime delivered</p>
+            </div>
+          </div>
+          <p className="text-[11px] text-stone-500 mt-4 text-center">
+            Every Zawadi gift supports a verified Kenyan artisan community · <span className="text-green-500">0% imported products</span>
+          </p>
         </div>
       </div>
     </Layout>

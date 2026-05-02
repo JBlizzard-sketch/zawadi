@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, FileText, Send, CheckCircle2, Printer } from "lucide-react";
+import { ArrowLeft, FileText, Send, CheckCircle2, Printer, Building2, ShoppingCart } from "lucide-react";
 import { useGetInvoice, getGetInvoiceQueryKey } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, INVOICE_STATUS_COLORS } from "@/lib/format";
@@ -161,6 +161,12 @@ export default function InvoiceDetail() {
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Tax Invoice</p>
                 </div>
                 <h1 className="text-xl font-serif font-semibold text-foreground font-mono" data-testid="text-invoice-number">{inv.invoiceNumber}</h1>
+                {inv.corporate_name && (
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <Building2 size={12} className="text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">{inv.corporate_name}</p>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge label={INVOICE_STATUS_LABELS[inv.status] ?? inv.status} colorClass={INVOICE_STATUS_COLORS[inv.status] ?? ""} />
@@ -189,6 +195,19 @@ export default function InvoiceDetail() {
                   >
                     <CheckCircle2 size={13} />
                     {markPaid.isPending ? "Recording…" : "Record Payment"}
+                  </Button>
+                )}
+
+                {inv.orderId && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setLocation(`/orders/${inv.orderId}`)}
+                    className="gap-1.5"
+                    data-testid="button-view-order"
+                  >
+                    <ShoppingCart size={13} />
+                    View Order
                   </Button>
                 )}
 

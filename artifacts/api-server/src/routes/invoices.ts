@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { invoicesTable, ordersTable, corporatesTable, insertInvoiceSchema } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -15,7 +15,13 @@ router.get("/invoices", async (req, res) => {
     const invoices = await db.select().from(invoicesTable)
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(invoicesTable.createdAt);
-    res.json(invoices);
+
+    const corpIds = [...new Set(invoices.map((i) => i.corporateId).filter(Boolean))] as string[];
+    const corps = corpIds.length
+      ? await db.select({ id: corporatesTable.id, name: corporatesTable.name }).from(corporatesTable).where(inArray(corporatesTable.id, corpIds))
+      : [];
+    const corpMap = Object.fromEntries(corps.map((c) => [c.id, c.name]));
+    res.json(invoices.map((i) => ({ ...i, corporate_name: i.corporateId ? (corpMap[i.corporateId] ?? null) : null })));
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch invoices" });
@@ -26,7 +32,13 @@ router.get("/invoices/:id", async (req, res) => {
   try {
     const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, req.params.id));
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
-    res.json(invoice);
+
+    let corporateName: string | null = null;
+    if (invoice.corporateId) {
+      const [corp] = await db.select({ name: corporatesTable.name }).from(corporatesTable).where(eq(corporatesTable.id, invoice.corporateId));
+      corporateName = corp?.name ?? null;
+    }
+    res.json({ ...invoice, corporate_name: corporateName });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch invoice" });

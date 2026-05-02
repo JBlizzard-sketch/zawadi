@@ -7,8 +7,10 @@ import {
   productsTable,
   orderItemsTable,
   productImagesTable,
+  invoicesTable,
+  quotesTable,
 } from "@workspace/db/schema";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 
 const router = Router();
 
@@ -137,6 +139,91 @@ router.get("/dashboard/top-products", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch top products" });
+  }
+});
+
+router.get("/dashboard/alerts", async (req, res) => {
+  try {
+    const now = new Date();
+    const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const ago7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [overdueRows, expiringRows, stuckRows, esgRows] = await Promise.all([
+      db.select({
+        count: sql<number>`count(*)`,
+        total: sql<number>`coalesce(sum(total_amount::numeric), 0)`,
+      }).from(invoicesTable).where(
+        and(eq(invoicesTable.status, "sent"), sql`due_date < ${now}`)
+      ),
+      db.select({ count: sql<number>`count(*)` }).from(quotesTable).where(
+        and(
+          sql`status in ('draft','sent')`,
+          sql`valid_until >= ${now}`,
+          sql`valid_until <= ${in7Days}`
+        )
+      ),
+      db.select({ count: sql<number>`count(*)` }).from(ordersTable).where(
+        and(eq(ordersTable.status, "pending"), sql`created_at < ${ago7Days}`)
+      ),
+      db.select({
+        suppliers: sql<number>`count(*)`,
+        counties: sql<number>`count(distinct county)`,
+      }).from(suppliersTable).where(eq(suppliersTable.isVerified, true)),
+    ]);
+
+    res.json({
+      overdue_invoices: { count: Number(overdueRows[0]?.count ?? 0), total_kes: Number(overdueRows[0]?.total ?? 0) },
+      expiring_quotes: { count: Number(expiringRows[0]?.count ?? 0) },
+      stuck_pending_orders: { count: Number(stuckRows[0]?.count ?? 0) },
+      esg: { verified_suppliers: Number(esgRows[0]?.suppliers ?? 0), counties_covered: Number(esgRows[0]?.counties ?? 0) },
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch alerts" });
+  }
+});
+
+router.get("/reports/top-clients", async (req, res) => {
+  try {
+    const { limit = "10" } = req.query as Record<string, string>;
+    const rows = await db
+      .select({
+        corporate_id: ordersTable.corporateId,
+        corporate_name: corporatesTable.name,
+        total_orders: sql<number>`count(${ordersTable.id})`,
+        total_spend: sql<number>`coalesce(sum(${ordersTable.total}::numeric), 0)`,
+        tier: corporatesTable.tier,
+      })
+      .from(ordersTable)
+      .innerJoin(corporatesTable, eq(ordersTable.corporateId, corporatesTable.id))
+      .groupBy(ordersTable.corporateId, corporatesTable.name, corporatesTable.tier)
+      .orderBy(desc(sql`sum(${ordersTable.total}::numeric)`))
+      .limit(parseInt(limit));
+    res.json(rows.map((r) => ({
+      ...r,
+      total_orders: Number(r.total_orders),
+      total_spend: Number(r.total_spend),
+    })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch top clients" });
+  }
+});
+
+router.get("/reports/invoice-summary", async (req, res) => {
+  try {
+    const rows = await db
+      .select({
+        status: invoicesTable.status,
+        count: sql<number>`count(*)`,
+        total: sql<number>`coalesce(sum(total_amount::numeric), 0)`,
+      })
+      .from(invoicesTable)
+      .groupBy(invoicesTable.status);
+    res.json(rows.map((r) => ({ status: r.status, count: Number(r.count), total: Number(r.total) })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch invoice summary" });
   }
 });
 

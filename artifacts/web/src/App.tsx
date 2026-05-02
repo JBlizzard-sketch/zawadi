@@ -21,6 +21,7 @@ import Corporates from "@/pages/Corporates";
 import CorporateDetail from "@/pages/CorporateDetail";
 import Invoices from "@/pages/Invoices";
 import InvoiceDetail from "@/pages/InvoiceDetail";
+import Reports from "@/pages/Reports";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +52,7 @@ function Router() {
       <Route path="/corporates/:id" component={CorporateDetail} />
       <Route path="/invoices" component={Invoices} />
       <Route path="/invoices/:id" component={InvoiceDetail} />
+      <Route path="/reports" component={Reports} />
       <Route component={NotFound} />
     </Switch>
   );

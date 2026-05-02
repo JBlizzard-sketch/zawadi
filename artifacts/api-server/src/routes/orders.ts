@@ -6,6 +6,7 @@ import {
   corporatesTable,
   productsTable,
   recipientsTable,
+  invoicesTable,
 } from "@workspace/db/schema";
 import { eq, and, sql, ilike, or, inArray } from "drizzle-orm";
 
@@ -61,12 +62,21 @@ router.get("/orders/:id", async (req, res) => {
     const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
-    const [items, recipients] = await Promise.all([
+    const [items, recipients, invoiceRows] = await Promise.all([
       db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id)),
       db.select().from(recipientsTable).where(eq(recipientsTable.orderId, order.id)),
+      db.select({ id: invoicesTable.id, invoiceNumber: invoicesTable.invoiceNumber, status: invoicesTable.status })
+        .from(invoicesTable).where(eq(invoicesTable.orderId, order.id)).limit(1),
     ]);
 
-    res.json({ ...order, items, recipients });
+    let corporateName: string | null = null;
+    if (order.corporateId) {
+      const [corp] = await db.select({ name: corporatesTable.name }).from(corporatesTable).where(eq(corporatesTable.id, order.corporateId));
+      corporateName = corp?.name ?? null;
+    }
+
+    const invoice = invoiceRows[0] ?? null;
+    res.json({ ...order, items, recipients, corporate_name: corporateName, invoice });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch order" });
@@ -128,8 +138,21 @@ router.post("/orders", async (req, res) => {
 
 router.put("/orders/:id", async (req, res) => {
   try {
+    const [current] = await db.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
+    if (!current) return res.status(404).json({ error: "Order not found" });
+
+    const updateData: Record<string, unknown> = { ...req.body, updatedAt: new Date() };
+
+    if (req.body.status && req.body.status !== current.status) {
+      const existingLog: any[] = (current.statusLog as any[]) ?? [];
+      updateData.statusLog = [
+        ...existingLog,
+        { status: req.body.status, at: new Date().toISOString() },
+      ];
+    }
+
     const [updated] = await db.update(ordersTable)
-      .set({ ...req.body, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(ordersTable.id, req.params.id))
       .returning();
     if (!updated) return res.status(404).json({ error: "Order not found" });

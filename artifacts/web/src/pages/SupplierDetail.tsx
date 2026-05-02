@@ -1,16 +1,75 @@
+import { useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
-import { ArrowLeft, MapPin, Phone, Mail, CheckCircle2, Package, Leaf, ExternalLink } from "lucide-react";
+import { ArrowLeft, MapPin, Phone, Mail, CheckCircle2, Package, Leaf, ExternalLink, Pencil, X, Users, Award, ShieldCheck, TreePine } from "lucide-react";
 import { useGetSupplier, getGetSupplierQueryKey, useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Layout from "@/components/layout/Layout";
+
+const COUNTIES = ["Nairobi", "Kajiado", "Murang'a", "Kirinyaga", "Mombasa", "Kisumu", "Nakuru", "Kiambu", "Machakos", "Nyeri", "Meru", "Embu", "Laikipia"];
+const ONBOARDING_LABELS: Record<string, string> = { pending: "Pending", in_review: "In Review", approved: "Approved", rejected: "Rejected" };
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function SupplierDetail() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+
+  const [showEdit, setShowEdit] = useState(false);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState("");
 
   const { data: supplier, isLoading } = useGetSupplier(id, { query: { enabled: !!id, queryKey: getGetSupplierQueryKey(id) } });
+
+  const toggleVerified = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BASE}/api/suppliers/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isVerified: !s?.isVerified }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetSupplierQueryKey(id) }),
+  });
+
+  const saveSupplier = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const res = await fetch(`${BASE}/api/suppliers/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "Failed to save"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getGetSupplierQueryKey(id) });
+      setShowEdit(false);
+    },
+    onError: (e: any) => setSaveError(e.message ?? "Something went wrong."),
+  });
+
+  const openEdit = () => {
+    setSaveError("");
+    setEditForm({
+      name: s?.name ?? "",
+      contactName: s?.contactName ?? "",
+      email: s?.email ?? "",
+      phone: s?.phone ?? "",
+      county: s?.county ?? "Nairobi",
+      description: s?.description ?? "",
+      story: s?.story ?? "",
+      onboardingStatus: s?.onboardingStatus ?? "pending",
+    });
+    setShowEdit(true);
+  };
 
   const productParams = { supplier_id: id, limit: 6, offset: 0 };
   const { data: productsData, isLoading: productsLoading } = useListProducts(
@@ -70,11 +129,30 @@ export default function SupplierDetail() {
                   <span className="text-sm text-muted-foreground">{s.county}, Kenya</span>
                 </div>
               </div>
-              {s.isVerified && (
-                <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-semibold px-3 py-1.5 rounded-full border border-green-200" data-testid="badge-verified">
-                  <CheckCircle2 size={12} /> Verified Supplier
-                </span>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {s.isVerified ? (
+                  <button
+                    onClick={() => toggleVerified.mutate()}
+                    disabled={toggleVerified.isPending}
+                    className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-semibold px-3 py-1.5 rounded-full border border-green-200 hover:bg-green-200 transition-colors disabled:opacity-60"
+                    data-testid="badge-verified"
+                  >
+                    <CheckCircle2 size={12} /> Verified Supplier
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => toggleVerified.mutate()}
+                    disabled={toggleVerified.isPending}
+                    className="inline-flex items-center gap-1.5 bg-white/70 text-muted-foreground text-xs font-semibold px-3 py-1.5 rounded-full border border-border hover:bg-white transition-colors disabled:opacity-60"
+                    data-testid="button-verify-supplier"
+                  >
+                    <CheckCircle2 size={12} /> Mark as Verified
+                  </button>
+                )}
+                <Button size="sm" variant="outline" onClick={openEdit} className="gap-1.5 bg-white/70 hover:bg-white" data-testid="button-edit-supplier">
+                  <Pencil size={13} /> Edit
+                </Button>
+              </div>
             </div>
             {s.description && <p className="text-sm text-stone-700 leading-relaxed max-w-2xl">{s.description}</p>}
             {s.tags?.length > 0 && (
@@ -144,6 +222,47 @@ export default function SupplierDetail() {
           </div>
         </div>
 
+        {/* ESG / Impact Section */}
+        {(s.womenLed || s.artisanCount || (s.certifications?.length > 0) || s.esgNotes) && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <TreePine size={16} className="text-green-700" />
+              <h2 className="text-base font-serif font-semibold text-foreground">Impact & ESG Profile</h2>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              {s.womenLed && (
+                <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 flex flex-col items-center text-center gap-2" data-testid="badge-women-led">
+                  <Users size={20} className="text-rose-600" />
+                  <p className="text-xs font-semibold text-rose-800">Women-Led</p>
+                  <p className="text-[11px] text-rose-600 leading-tight">Female-founded or majority female-led enterprise</p>
+                </div>
+              )}
+              {s.artisanCount && (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex flex-col items-center text-center gap-2" data-testid="stat-artisan-count">
+                  <span className="text-2xl font-bold text-amber-700">{s.artisanCount}</span>
+                  <p className="text-xs font-semibold text-amber-800">Artisans Employed</p>
+                  <p className="text-[11px] text-amber-600 leading-tight">Direct livelihoods supported</p>
+                </div>
+              )}
+              {s.certifications?.map((cert: string) => (
+                <div key={cert} className="bg-green-50 border border-green-100 rounded-xl p-4 flex flex-col items-center text-center gap-2">
+                  <Award size={20} className="text-green-700" />
+                  <p className="text-xs font-semibold text-green-800">{cert}</p>
+                  <ShieldCheck size={13} className="text-green-600" />
+                </div>
+              ))}
+            </div>
+            {s.esgNotes && (
+              <div className="bg-green-50/60 border border-green-100 rounded-xl p-5">
+                <p className="text-xs font-semibold text-green-800 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Leaf size={12} /> ESG Notes
+                </p>
+                <p className="text-sm text-stone-700 leading-relaxed">{s.esgNotes}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Products by this Supplier */}
         <div>
           <div className="flex items-center justify-between mb-4">
@@ -205,6 +324,84 @@ export default function SupplierDetail() {
           )}
         </div>
       </div>
+
+      {/* Edit Supplier Modal */}
+      {showEdit && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 bg-black/40 backdrop-blur-sm">
+          <div className="bg-card border border-card-border rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between rounded-t-xl">
+              <h2 className="text-base font-serif font-semibold text-foreground">Edit Supplier</h2>
+              <button onClick={() => setShowEdit(false)} className="text-muted-foreground hover:text-foreground transition-colors"><X size={18} /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Business Name *</label>
+                <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} placeholder="Kijani Crafts Ltd" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">County</label>
+                  <Select value={editForm.county} onValueChange={v => setEditForm(f => ({ ...f, county: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{COUNTIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Onboarding Status</label>
+                  <Select value={editForm.onboardingStatus} onValueChange={v => setEditForm(f => ({ ...f, onboardingStatus: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{Object.entries(ONBOARDING_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Contact Person</label>
+                <Input value={editForm.contactName} onChange={e => setEditForm(f => ({ ...f, contactName: e.target.value }))} placeholder="Mary Njeri" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
+                  <Input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} placeholder="hello@kijani.co.ke" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Phone</label>
+                  <Input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="+254 700 000 000" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Short Description</label>
+                <textarea
+                  rows={2}
+                  value={editForm.description}
+                  onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Artisan cooperative producing handwoven…"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Producer Story</label>
+                <textarea
+                  rows={4}
+                  value={editForm.story}
+                  onChange={e => setEditForm(f => ({ ...f, story: e.target.value }))}
+                  placeholder="Tell the story behind this supplier…"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+              {saveError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>}
+            </div>
+            <div className="sticky bottom-0 bg-card border-t border-border px-6 py-4 flex gap-3 justify-end rounded-b-xl">
+              <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
+              <Button
+                disabled={!editForm.name.trim() || saveSupplier.isPending}
+                onClick={() => saveSupplier.mutate({ ...editForm })}
+              >
+                {saveSupplier.isPending ? "Saving…" : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

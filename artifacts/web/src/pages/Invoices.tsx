@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Receipt, ChevronRight } from "lucide-react";
+import { Receipt, ChevronRight, Download } from "lucide-react";
 import { useListInvoices, getListInvoicesQueryKey } from "@workspace/api-client-react";
 import { formatKES, formatDate, INVOICE_STATUS_COLORS } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -12,6 +12,24 @@ const INVOICE_STATUSES = ["draft", "sent", "paid", "overdue", "cancelled"];
 const INVOICE_STATUS_LABELS: Record<string, string> = {
   draft: "Draft", sent: "Sent", paid: "Paid", overdue: "Overdue", cancelled: "Cancelled",
 };
+
+function exportCSV(rows: any[]) {
+  if (!rows.length) return;
+  const headers = ["Invoice No.", "Issued", "Due Date", "Client", "Status", "Total (KES)"];
+  const lines = rows.map((inv) => [
+    inv.invoiceNumber ?? "",
+    inv.createdAt ? new Date(inv.createdAt).toLocaleDateString("en-KE") : "",
+    inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-KE") : "",
+    inv.corporate_name ?? "",
+    inv.status ?? "",
+    String(parseFloat(inv.totalAmount ?? "0").toFixed(2)),
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
+  const csv = [headers.join(","), ...lines].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = `zawadi-invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
 
 export default function Invoices() {
   const [, setLocation] = useLocation();
@@ -29,6 +47,15 @@ export default function Invoices() {
             <h1 className="text-2xl font-serif font-semibold text-foreground">Invoices</h1>
             <p className="text-sm text-muted-foreground mt-1">KRA-compliant VAT invoices</p>
           </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => exportCSV(invoiceList)}
+              disabled={invoiceList.length === 0}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-card text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              data-testid="button-export-csv"
+            >
+              <Download size={13} /> Export CSV
+            </button>
           <Select value={status} onValueChange={(v) => setStatus(v === "all" ? "" : v)}>
             <SelectTrigger className="w-40 h-9 text-sm" data-testid="select-invoice-status">
               <SelectValue placeholder="All statuses" />
@@ -40,6 +67,7 @@ export default function Invoices() {
               ))}
             </SelectContent>
           </Select>
+          </div>
         </div>
 
         <div className="bg-card border border-card-border rounded-xl overflow-hidden shadow-sm">
@@ -82,8 +110,8 @@ export default function Invoices() {
                     data-testid={`row-invoice-${inv.id}`}
                   >
                     <td className="px-5 py-3">
-                      <p className="font-semibold text-foreground font-mono text-xs">{inv.invoiceNumber}</p>
-                      {inv.kraPin && <p className="text-xs text-muted-foreground">KRA: {inv.kraPin}</p>}
+                      <p className="font-semibold text-foreground font-mono text-sm">{inv.invoiceNumber}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{inv.corporate_name ?? (inv.kraPin ? `KRA: ${inv.kraPin}` : "—")}</p>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(inv.createdAt)}</td>
                     <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(inv.dueDate)}</td>
