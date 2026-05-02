@@ -1,7 +1,7 @@
 import { useParams, useLocation } from "wouter";
 import { ArrowLeft, ArrowRight, Send, XCircle, Printer, Building2 } from "lucide-react";
 import { useGetQuote, getGetQuoteQueryKey, useConvertQuoteToOrder } from "@workspace/api-client-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, QUOTE_STATUS_COLORS } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,91 +14,130 @@ const QUOTE_STATUS_LABELS: Record<string, string> = {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-function PrintableQuote({ q }: { q: any }) {
+function PrintableQuote({ q, settings }: { q: any; settings: any }) {
+  const s = settings ?? {};
   const items: any[] = q.items ?? [];
+
   return (
-    <div id="print-quote" className="hidden print:block font-sans text-[13px] text-gray-900 max-w-2xl mx-auto p-8">
+    <div id="print-quote" className="hidden print:block font-sans text-[12px] text-gray-900 bg-white" style={{ maxWidth: 740, margin: "0 auto", padding: 40 }}>
+
       {/* Header */}
-      <div className="flex justify-between items-start mb-10 border-b border-gray-200 pb-6">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #1a1a1a", paddingBottom: 20, marginBottom: 24 }}>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">ZAWADI</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Corporate Gifting Platform</p>
-          <p className="text-xs text-gray-500">Nairobi, Kenya · zawadi.co.ke</p>
+          {s.logoUrl ? (
+            <img src={s.logoUrl} alt="Logo" style={{ height: 44, objectFit: "contain", marginBottom: 6 }} />
+          ) : (
+            <p style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5, color: "#1a1a1a", margin: 0 }}>{s.companyName || "ZAWADI"}</p>
+          )}
+          {s.companyName && s.logoUrl && <p style={{ fontSize: 11, color: "#555", margin: "2px 0 0" }}>{s.companyName}</p>}
+          {s.address && <p style={{ fontSize: 10, color: "#777", margin: "2px 0 0" }}>{s.address}, {s.city ?? "Nairobi"}</p>}
+          {s.phone && <p style={{ fontSize: 10, color: "#777", margin: "1px 0 0" }}>{s.phone}</p>}
+          {s.email && <p style={{ fontSize: 10, color: "#777", margin: "1px 0 0" }}>{s.email}</p>}
+          {s.website && <p style={{ fontSize: 10, color: "#777", margin: "1px 0 0" }}>{s.website}</p>}
         </div>
-        <div className="text-right">
-          <p className="text-xl font-bold text-gray-900">QUOTATION</p>
-          <p className="font-mono text-base font-semibold mt-1">{q.reference ?? q.id.slice(0, 8).toUpperCase()}</p>
-          <p className="text-xs text-gray-500 mt-1">Status: {QUOTE_STATUS_LABELS[q.status] ?? q.status}</p>
+        <div style={{ textAlign: "right" }}>
+          <p style={{ fontSize: 18, fontWeight: 800, color: "#b5451b", letterSpacing: 1, margin: 0 }}>QUOTATION</p>
+          <p style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 700, margin: "4px 0 0" }}>{q.reference ?? q.id?.slice(0, 8).toUpperCase()}</p>
+          <p style={{ fontSize: 10, color: "#777", margin: "4px 0 0" }}>Status: <strong>{QUOTE_STATUS_LABELS[q.status] ?? q.status}</strong></p>
+          <p style={{ fontSize: 10, color: "#999", margin: "2px 0 0", fontStyle: "italic" }}>This is not a tax invoice</p>
         </div>
       </div>
 
-      {/* Dates & Client */}
-      <div className="grid grid-cols-3 gap-6 mb-8 text-sm">
-        <div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Prepared For</p>
-          <p className="font-semibold">{q.corporate_name ?? "—"}</p>
+      {/* Billing parties */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
+        <div style={{ background: "#f9f7f4", borderRadius: 6, padding: "10px 14px" }}>
+          <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 1, color: "#999", margin: "0 0 4px", fontWeight: 600 }}>Prepared By</p>
+          <p style={{ fontWeight: 700, margin: 0 }}>{s.companyName || "Zawadi Corporate Gifting"}</p>
+          {s.address && <p style={{ color: "#555", margin: "1px 0 0" }}>{s.address}</p>}
+          <p style={{ color: "#555", margin: "1px 0 0" }}>{s.city ?? "Nairobi"}, {s.country ?? "Kenya"}</p>
+          {s.accountManagerName && <p style={{ margin: "4px 0 0", fontSize: 10 }}>AM: <strong>{s.accountManagerName}</strong></p>}
+          {s.accountManagerEmail && <p style={{ color: "#555", margin: "1px 0 0", fontSize: 10 }}>{s.accountManagerEmail}</p>}
+          {s.accountManagerPhone && <p style={{ color: "#555", margin: "1px 0 0", fontSize: 10 }}>{s.accountManagerPhone}</p>}
         </div>
-        <div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Issue Date</p>
-          <p className="font-medium">{formatDate(q.createdAt)}</p>
+        <div style={{ background: "#f9f7f4", borderRadius: 6, padding: "10px 14px" }}>
+          <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 1, color: "#999", margin: "0 0 4px", fontWeight: 600 }}>Prepared For</p>
+          <p style={{ fontWeight: 700, margin: 0 }}>{q.corporate_name ?? "—"}</p>
         </div>
-        <div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Valid Until</p>
-          <p className="font-medium text-red-700">{formatDate(q.validUntil)}</p>
-        </div>
+      </div>
+
+      {/* Dates */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+        {[
+          { label: "Issue Date", value: formatDate(q.createdAt) },
+          { label: "Valid Until", value: formatDate(q.validUntil) },
+          { label: "Payment Terms", value: s.defaultPaymentTermsDays ? `Net ${s.defaultPaymentTermsDays} days` : "Net 30 days" },
+        ].map(({ label, value }) => (
+          <div key={label} style={{ borderLeft: "2px solid #e5ded6", paddingLeft: 10 }}>
+            <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 1, color: "#999", margin: "0 0 2px", fontWeight: 600 }}>{label}</p>
+            <p style={{ fontWeight: 600, margin: 0, color: label === "Valid Until" ? "#b5451b" : "#1a1a1a" }}>{value || "—"}</p>
+          </div>
+        ))}
       </div>
 
       {/* Line Items */}
-      <div className="border border-gray-200 rounded-lg overflow-hidden mb-8">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Product / Description</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Qty</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Unit Price</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Line Total</th>
+      <div style={{ marginBottom: 20 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+          <thead>
+            <tr style={{ background: "#1a1a1a", color: "#fff" }}>
+              <th style={{ textAlign: "left", padding: "7px 10px", fontWeight: 600 }}>Product / Description</th>
+              <th style={{ textAlign: "center", padding: "7px 10px", fontWeight: 600, width: 60 }}>Qty</th>
+              <th style={{ textAlign: "right", padding: "7px 10px", fontWeight: 600, width: 100 }}>Unit Price</th>
+              <th style={{ textAlign: "right", padding: "7px 10px", fontWeight: 600, width: 110 }}>Line Total</th>
             </tr>
           </thead>
           <tbody>
             {items.map((item: any, i: number) => (
-              <tr key={i} className="border-t border-gray-100">
-                <td className="px-4 py-3">{item.product_name}</td>
-                <td className="px-4 py-3 text-right">{item.quantity}</td>
-                <td className="px-4 py-3 text-right">{formatKES(item.unit_price)}</td>
-                <td className="px-4 py-3 text-right font-medium">{formatKES(item.line_total)}</td>
+              <tr key={i} style={{ borderBottom: "1px solid #e8e2da", background: i % 2 === 0 ? "#fff" : "#faf8f5" }}>
+                <td style={{ padding: "7px 10px", fontWeight: 500 }}>{item.product_name}</td>
+                <td style={{ textAlign: "center", padding: "7px 10px" }}>{item.quantity}</td>
+                <td style={{ textAlign: "right", padding: "7px 10px" }}>{formatKES(item.unit_price)}</td>
+                <td style={{ textAlign: "right", padding: "7px 10px", fontWeight: 500 }}>{formatKES(item.line_total)}</td>
               </tr>
             ))}
-            <tr className="border-t border-gray-100 bg-gray-50/50">
-              <td colSpan={3} className="px-4 py-2 text-right text-xs text-gray-500">Subtotal (excl. VAT)</td>
-              <td className="px-4 py-2 text-right font-medium">{formatKES(q.subtotal)}</td>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Totals */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 24 }}>
+        <table style={{ fontSize: 12, minWidth: 260 }}>
+          <tbody>
+            <tr>
+              <td style={{ padding: "4px 10px 4px 0", color: "#555" }}>Subtotal (excl. VAT)</td>
+              <td style={{ textAlign: "right", padding: "4px 0", fontWeight: 500 }}>{formatKES(q.subtotal)}</td>
             </tr>
-            <tr className="border-t border-gray-100 bg-gray-50/50">
-              <td colSpan={3} className="px-4 py-2 text-right text-xs text-gray-500">VAT @ 16% (KRA)</td>
-              <td className="px-4 py-2 text-right font-medium">{formatKES(q.vat)}</td>
+            <tr>
+              <td style={{ padding: "4px 10px 4px 0", color: "#555" }}>VAT @ 16% (KRA)</td>
+              <td style={{ textAlign: "right", padding: "4px 0", fontWeight: 500 }}>{formatKES(q.vat)}</td>
             </tr>
-            <tr className="border-t-2 border-gray-300 bg-gray-50">
-              <td colSpan={3} className="px-4 py-3 text-right font-bold">Total (incl. VAT)</td>
-              <td className="px-4 py-3 text-right font-bold text-lg">{formatKES(q.total)}</td>
+            <tr style={{ borderTop: "2px solid #1a1a1a" }}>
+              <td style={{ padding: "8px 10px 4px 0", fontWeight: 800, fontSize: 13 }}>Total (incl. VAT)</td>
+              <td style={{ textAlign: "right", padding: "8px 0 4px", fontWeight: 800, fontSize: 15, color: "#b5451b" }}>{formatKES(q.total)}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
       {q.notes && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-6">
-          <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">Notes</p>
-          <p className="text-sm text-stone-700 whitespace-pre-wrap">{q.notes}</p>
+        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "10px 14px", marginBottom: 16 }}>
+          <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 1, color: "#92400e", margin: "0 0 4px", fontWeight: 600 }}>Notes</p>
+          <p style={{ color: "#44403c", margin: 0, whiteSpace: "pre-wrap" }}>{q.notes}</p>
         </div>
       )}
 
-      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-6 text-sm">
-        <p className="font-semibold text-gray-700 mb-1">Payment Terms</p>
-        <p className="text-gray-500 text-xs">This quotation is valid for 30 days from the issue date. Prices include 16% VAT as required by KRA. A 50% deposit is required to confirm the order. All products are sourced from verified Kenyan artisan suppliers.</p>
+      {/* Terms */}
+      <div style={{ background: "#f9f7f4", border: "1px solid #e5ded6", borderRadius: 6, padding: "10px 14px", marginBottom: 20 }}>
+        <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 1, color: "#999", margin: "0 0 6px", fontWeight: 600 }}>Terms & Conditions</p>
+        <p style={{ color: "#555", margin: 0, fontSize: 10, lineHeight: 1.5 }}>
+          This quotation is valid until the date shown above. A 50% deposit is required to confirm the order. All products are sourced from verified Kenyan artisan suppliers. Prices include 16% VAT as required by KRA.
+          {s.invoiceFooter ? ` ${s.invoiceFooter}` : ""}
+        </p>
       </div>
 
-      <p className="text-[11px] text-gray-400 text-center mt-10 border-t border-gray-100 pt-4">
-        Quotation {q.reference ?? q.id.slice(0, 8).toUpperCase()} · Zawadi Corporate Gifting Platform · Nairobi, Kenya
-        <br />Generated {new Date().toLocaleDateString("en-KE", { year: "numeric", month: "long", day: "numeric" })} · This is not a tax invoice.
+      <p style={{ fontSize: 9, color: "#aaa", textAlign: "center", borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
+        {s.companyName || "Zawadi Corporate Gifting"} · {s.city ?? "Nairobi"}, {s.country ?? "Kenya"}
+        {s.kraPin ? ` · KRA PIN: ${s.kraPin}` : ""}
+        {" "}· Quote {q.reference} · Generated {new Date().toLocaleDateString("en-KE", { year: "numeric", month: "long", day: "numeric" })}
       </p>
     </div>
   );
@@ -122,6 +161,11 @@ export default function QuoteDetail() {
   const { data: quote, isLoading } = useGetQuote(id, { query: { enabled: !!id, queryKey: getGetQuoteQueryKey(id) } });
   const convertToOrder = useConvertQuoteToOrder();
   const q = quote as any;
+
+  const { data: settings } = useQuery<any>({
+    queryKey: ["settings"],
+    queryFn: () => fetch(`${BASE}/api/settings`).then(r => r.json()),
+  });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetQuoteQueryKey(id) });
 
@@ -173,7 +217,7 @@ export default function QuoteDetail() {
   return (
     <Layout>
       {/* Hidden printable version */}
-      {q && <PrintableQuote q={q} />}
+      {q && <PrintableQuote q={q} settings={settings} />}
 
       <div className="p-8 max-w-3xl mx-auto print:hidden">
         <button onClick={() => setLocation("/quotes")} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors" data-testid="button-back">

@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Users, AlertCircle, FileText, Check, Building2, Printer, Clock } from "lucide-react";
+import { ArrowLeft, Package, Users, AlertCircle, FileText, Check, Building2, Printer, Clock, Pencil, X } from "lucide-react";
 import { useGetOrder, getGetOrderQueryKey, useCancelOrder } from "@workspace/api-client-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { formatKES, formatDate, formatDateTime, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +31,28 @@ const NEXT_LABEL: Record<string, string> = {
 };
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+async function advanceOrderStatus(id: string, status: string) {
+  const res = await fetch(`${BASE}/api/orders/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error("Failed to advance status");
+  return res.json();
+}
+
+async function generateInvoice(orderId: string) {
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + 30);
+  const res = await fetch(`${BASE}/api/invoices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ order_id: orderId, due_date: dueDate.toISOString() }),
+  });
+  if (!res.ok) throw new Error("Failed to generate invoice");
+  return res.json();
+}
 
 function PrintablePackingSlip({ o }: { o: any }) {
   const items: any[] = o.items ?? [];
@@ -131,27 +154,6 @@ function PrintablePackingSlip({ o }: { o: any }) {
   );
 }
 
-async function advanceOrderStatus(id: string, status: string) {
-  const res = await fetch(`${BASE}/api/orders/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status }),
-  });
-  if (!res.ok) throw new Error("Failed to update order");
-  return res.json();
-}
-
-async function generateInvoice(orderId: string) {
-  const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const res = await fetch(`${BASE}/api/invoices`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ order_id: orderId, due_date: dueDate }),
-  });
-  if (!res.ok) throw new Error("Failed to generate invoice");
-  return res.json();
-}
-
 export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -168,6 +170,18 @@ export default function OrderDetail() {
       invalidate();
       setLocation(`/invoices/${inv.id}`);
     },
+  });
+
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesValue, setNotesValue] = useState("");
+  const saveNotes = useMutation({
+    mutationFn: (notes: string) =>
+      fetch(`${BASE}/api/orders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes }),
+      }).then(r => r.json()),
+    onSuccess: () => { invalidate(); setEditingNotes(false); },
   });
 
   const o = order as any;
@@ -389,12 +403,55 @@ export default function OrderDetail() {
               </div>
             </div>
 
-            {o.notes && (
-              <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-4">
-                <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1.5 flex items-center gap-1"><AlertCircle size={12} /> Notes</p>
-                <p className="text-sm text-stone-700">{o.notes}</p>
+            {/* Notes — editable */}
+            <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide flex items-center gap-1">
+                  <AlertCircle size={12} /> Internal Notes
+                </p>
+                {!editingNotes && (
+                  <button
+                    onClick={() => { setNotesValue(o.notes ?? ""); setEditingNotes(true); }}
+                    className="text-xs text-amber-700 hover:text-amber-900 flex items-center gap-0.5 transition-colors"
+                    data-testid="button-edit-notes"
+                  >
+                    <Pencil size={11} /> Edit
+                  </button>
+                )}
               </div>
-            )}
+              {editingNotes ? (
+                <div className="space-y-2">
+                  <textarea
+                    autoFocus
+                    rows={3}
+                    value={notesValue}
+                    onChange={e => setNotesValue(e.target.value)}
+                    className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-stone-700 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
+                    placeholder="Add internal notes visible only to your team…"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => saveNotes.mutate(notesValue)}
+                      disabled={saveNotes.isPending}
+                      className="text-xs font-semibold text-amber-800 bg-amber-100 border border-amber-200 px-3 py-1 rounded hover:bg-amber-200 transition-colors"
+                      data-testid="button-save-notes"
+                    >
+                      {saveNotes.isPending ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      onClick={() => setEditingNotes(false)}
+                      className="text-xs text-amber-700 hover:text-amber-900 px-2 py-1 rounded transition-colors flex items-center gap-0.5"
+                    >
+                      <X size={11} /> Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : o.notes ? (
+                <p className="text-sm text-stone-700 whitespace-pre-wrap">{o.notes}</p>
+              ) : (
+                <p className="text-sm text-amber-700/50 italic">No notes — click Edit to add one</p>
+              )}
+            </div>
 
             {/* Activity Timeline */}
             {((o.statusLog as any[])?.length > 0) && (

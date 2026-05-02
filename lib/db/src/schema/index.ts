@@ -1,5 +1,6 @@
 export * from "./categories";
 export * from "./collections";
+export * from "./corporate_contacts";
 export * from "./corporates";
 export * from "./hampers";
 export * from "./invoices";

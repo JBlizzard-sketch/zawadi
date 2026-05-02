@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
-import { ArrowLeft, Building2, Mail, Phone, FileText, ShoppingCart, Receipt, ChevronRight, Pencil, X } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Building2, Mail, Phone, FileText, ShoppingCart, Receipt, ChevronRight, Pencil, X, Users2, Plus, Trash2, Star } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -42,8 +42,20 @@ export default function CorporateDetail() {
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState("");
 
+  // Contacts state
+  const CONTACTS_KEY = ["contacts", id];
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [editingContact, setEditingContact] = useState<any>(null);
+  const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", isPrimary: false, notes: "" });
+  const [contactError, setContactError] = useState("");
+
   const { data: corporate, isLoading: corpLoading } = useGetCorporate(id, { query: { enabled: !!id, queryKey: getGetCorporateQueryKey(id) } });
   const { data: dashboard, isLoading: dashLoading } = useGetCorporateDashboard(id, { query: { enabled: !!id, queryKey: getGetCorporateDashboardQueryKey(id) } });
+  const { data: contacts = [] } = useQuery<any[]>({
+    queryKey: CONTACTS_KEY,
+    queryFn: () => fetch(`${BASE}/api/corporates/${id}/contacts`).then(r => r.json()),
+    enabled: !!id,
+  });
 
   const c = corporate as any;
   const d = dashboard as any;
@@ -68,6 +80,45 @@ export default function CorporateDetail() {
       setShowEdit(false);
     },
     onError: (e: any) => setSaveError(e.message ?? "Something went wrong."),
+  });
+
+  const openAddContact = () => {
+    setEditingContact(null);
+    setContactForm({ name: "", title: "", email: "", phone: "", isPrimary: false, notes: "" });
+    setContactError("");
+    setShowContactModal(true);
+  };
+  const openEditContact = (ct: any) => {
+    setEditingContact(ct);
+    setContactForm({ name: ct.name, title: ct.title ?? "", email: ct.email ?? "", phone: ct.phone ?? "", isPrimary: ct.isPrimary, notes: ct.notes ?? "" });
+    setContactError("");
+    setShowContactModal(true);
+  };
+
+  const saveContact = useMutation({
+    mutationFn: async (body: typeof contactForm) => {
+      const url = editingContact
+        ? `${BASE}/api/corporates/${id}/contacts/${editingContact.id}`
+        : `${BASE}/api/corporates/${id}/contacts`;
+      const res = await fetch(url, {
+        method: editingContact ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "Failed"); }
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: CONTACTS_KEY }); setShowContactModal(false); },
+    onError: (e: any) => setContactError(e.message ?? "Something went wrong."),
+  });
+
+  const deleteContact = useMutation({
+    mutationFn: async (contactId: string) => {
+      const res = await fetch(`${BASE}/api/corporates/${id}/contacts/${contactId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CONTACTS_KEY }),
   });
 
   const openEdit = () => {
@@ -305,6 +356,85 @@ export default function CorporateDetail() {
           )}
         </div>
 
+        {/* Contacts Panel */}
+        <div className="mt-6 bg-card border border-card-border rounded-xl overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users2 size={15} className="text-muted-foreground" />
+              <p className="text-sm font-semibold text-foreground">Contacts</p>
+              {contacts.length > 0 && (
+                <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{contacts.length}</span>
+              )}
+            </div>
+            <button
+              onClick={openAddContact}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              data-testid="button-add-contact"
+            >
+              <Plus size={12} /> Add Contact
+            </button>
+          </div>
+          {contacts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-sm text-muted-foreground gap-2">
+              <Users2 size={28} className="text-muted-foreground/30" />
+              <p>No contacts yet</p>
+              <button onClick={openAddContact} className="text-xs text-primary hover:underline">+ Add first contact</button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {contacts.map((ct: any) => (
+                <div key={ct.id} className="flex items-start justify-between px-5 py-3.5 hover:bg-muted/20 transition-colors group" data-testid={`contact-row-${ct.id}`}>
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-xs font-bold text-primary">{ct.name.charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">{ct.name}</p>
+                        {ct.isPrimary && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                            <Star size={8} className="fill-amber-500 text-amber-500" /> Primary
+                          </span>
+                        )}
+                      </div>
+                      {ct.title && <p className="text-xs text-muted-foreground">{ct.title}</p>}
+                      <div className="flex items-center gap-3 mt-1 flex-wrap">
+                        {ct.email && (
+                          <a href={`mailto:${ct.email}`} className="text-xs text-primary hover:underline flex items-center gap-1">
+                            <Mail size={10} /> {ct.email}
+                          </a>
+                        )}
+                        {ct.phone && (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Phone size={10} /> {ct.phone}
+                          </span>
+                        )}
+                      </div>
+                      {ct.notes && <p className="text-xs text-muted-foreground mt-0.5 italic">{ct.notes}</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => openEditContact(ct)}
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      data-testid={`button-edit-contact-${ct.id}`}
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      onClick={() => { if (confirm(`Remove ${ct.name}?`)) deleteContact.mutate(ct.id); }}
+                      className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                      data-testid={`button-delete-contact-${ct.id}`}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Invoices Panel */}
         <div className="mt-6 mb-2 bg-card border border-card-border rounded-xl overflow-hidden shadow-sm">
           <div className="px-5 py-4 border-b border-border flex items-center gap-2">
@@ -346,6 +476,68 @@ export default function CorporateDetail() {
         </div>
 
       </div>
+
+      {/* Contact Modal */}
+      {showContactModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 bg-black/40 backdrop-blur-sm">
+          <div className="bg-card border border-card-border rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between rounded-t-xl">
+              <h2 className="text-base font-serif font-semibold text-foreground">{editingContact ? "Edit Contact" : "Add Contact"}</h2>
+              <button onClick={() => setShowContactModal(false)} className="text-muted-foreground hover:text-foreground"><X size={18} /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Full Name *</label>
+                <Input value={contactForm.name} onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))} placeholder="Jane Mwangi" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Title / Role</label>
+                <Input value={contactForm.title} onChange={e => setContactForm(f => ({ ...f, title: e.target.value }))} placeholder="Procurement Manager" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
+                  <Input type="email" value={contactForm.email} onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@company.co.ke" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Phone</label>
+                  <Input value={contactForm.phone} onChange={e => setContactForm(f => ({ ...f, phone: e.target.value }))} placeholder="+254 722 000 000" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Notes (optional)</label>
+                <textarea
+                  rows={2}
+                  value={contactForm.notes}
+                  onChange={e => setContactForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Prefers email, handles all gifting budgets over KES 50k"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={contactForm.isPrimary}
+                  onChange={e => setContactForm(f => ({ ...f, isPrimary: e.target.checked }))}
+                  className="rounded border-input"
+                />
+                <span className="text-sm text-foreground">Mark as primary contact</span>
+              </label>
+              {contactError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{contactError}</p>}
+            </div>
+            <div className="sticky bottom-0 bg-card border-t border-border px-6 py-4 flex gap-3 justify-end rounded-b-xl">
+              <Button variant="outline" onClick={() => setShowContactModal(false)}>Cancel</Button>
+              <Button
+                disabled={!contactForm.name.trim() || saveContact.isPending}
+                onClick={() => saveContact.mutate(contactForm)}
+                data-testid="button-save-contact"
+              >
+                {saveContact.isPending ? "Saving…" : editingContact ? "Save Changes" : "Add Contact"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Corporate Modal */}
       {showEdit && (

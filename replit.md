@@ -64,27 +64,29 @@ scripts/
 
 ---
 
-## Pages (18 routes)
+## Pages (19 routes)
 
 | Route | Page | Features |
 |---|---|---|
 | `/` | Dashboard | Revenue chart, orders by status, top products, recent orders |
 | `/catalogue` | Catalogue | Product grid, search, category + occasion filters |
 | `/catalogue/:id` | ProductDetail | Bulk pricing tiers with savings %, occasion tags, CTAs, producer story |
-| `/collections` | Collections | Curated collection cards |
-| `/collections/:id` | CollectionDetail | Products in collection |
+| `/collections` | Collections | Curated collection cards, New Collection modal |
+| `/collections/:id` | CollectionDetail | Manage products (checkbox picker), Edit collection, Build Hamper shortcut |
 | `/hamper-builder` | HamperBuilder | Add products, set recipients, "Request Quote" modal |
 | `/quotes` | Quotes | List with status filter, "New Quote" modal |
 | `/quotes/:id` | QuoteDetail | Line items, Mark Sent / Reject / Convert to Order |
 | `/orders` | Orders | List with status filter |
 | `/orders/:id` | OrderDetail | Status timeline (7 steps), advance status, Generate Invoice, Cancel |
-| `/orders/:id/recipients` | Recipients | Recipient management |
+| `/orders/:id/recipients` | Recipients | Recipient management, CSV upload |
 | `/suppliers` | Suppliers | Supplier grid |
-| `/suppliers/:id` | SupplierDetail | Producer story (ESG), contact, products from supplier |
+| `/suppliers/:id` | SupplierDetail | Producer story (ESG: womenLed, artisanCount, certs), contact, products |
 | `/corporates` | Corporates | Client list |
 | `/corporates/:id` | CorporateDetail | Spend chart, recent orders, KRA PIN |
 | `/invoices` | Invoices | List with status + corporate filters |
-| `/invoices/:id` | InvoiceDetail | KRA VAT breakdown, Mark Sent, Record Payment, Print/PDF |
+| `/invoices/:id` | InvoiceDetail | Itemised line items print, company logo/banking details from settings |
+| `/reports` | Reports | Revenue chart, invoice status, orders by status, top products/clients |
+| `/settings` | Settings | Company KRA PIN, address, logo, account manager, banking details, invoice defaults |
 
 ---
 
@@ -123,9 +125,13 @@ scripts/
 
 ### Invoices
 - `GET /api/invoices` — list (params: corporate_id, status)
-- `GET /api/invoices/:id` — detail
+- `GET /api/invoices/:id` — detail with order line items + corporate address + order reference
 - `POST /api/invoices` — generate from order (body: order_id, due_date)
 - `PUT /api/invoices/:id` — update status (sets paidAt when status=paid)
+
+### Settings
+- `GET /api/settings` — company settings singleton (auto-creates with defaults if missing)
+- `PUT /api/settings` — update company settings (companyName, kraPin, address, banking, etc.)
 
 ### Dashboard
 - `GET /api/dashboard/stats` — KPIs, revenue by month, orders by status
