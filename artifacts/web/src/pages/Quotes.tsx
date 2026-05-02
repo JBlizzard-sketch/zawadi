@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { FileText, ChevronRight, Plus, Trash2, X, ChevronDown } from "lucide-react";
 import {
@@ -47,6 +47,21 @@ export default function Quotes() {
 
   const corporateList = (corporates as any[]) ?? [];
   const productList = (productsData as any)?.items ?? [];
+
+  // Auto-open modal pre-filled from URL params (e.g. from CorporateDetail)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const corpId = params.get("corporateId");
+    if (corpId) {
+      setModalCorporateId(corpId);
+      setModalNotes("");
+      setLineItems([{ productId: "", productName: "", unitPrice: 0, quantity: 1 }]);
+      setSubmitError("");
+      setShowModal(true);
+      // Clean URL without reloading
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const openModal = () => {
     setModalCorporateId("");

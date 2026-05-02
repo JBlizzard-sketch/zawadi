@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ShoppingCart, ChevronRight } from "lucide-react";
+import { ShoppingCart, ChevronRight, Search, X } from "lucide-react";
 import { useListOrders, getListOrdersQueryKey } from "@workspace/api-client-react";
 import { formatKES, formatDate, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -16,10 +16,11 @@ const STATUSES = [
 export default function Orders() {
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState("");
+  const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
   const limit = 20;
 
-  const params = { status: status || undefined, limit, offset };
+  const params = { status: status || undefined, search: search || undefined, limit, offset };
   const { data: ordersData, isLoading } = useListOrders(params, { query: { queryKey: getListOrdersQueryKey(params) } });
 
   const orders = (ordersData as any)?.items ?? [];
@@ -30,22 +31,41 @@ export default function Orders() {
   return (
     <Layout>
       <div className="p-8 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-serif font-semibold text-foreground">Orders</h1>
             <p className="text-sm text-muted-foreground mt-1">{total} order{total !== 1 ? "s" : ""} total</p>
           </div>
-          <Select value={status} onValueChange={(v) => { setStatus(v === "all" ? "" : v); setOffset(0); }}>
-            <SelectTrigger className="w-44 h-9 text-sm" data-testid="select-status">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>{ORDER_STATUS_LABELS[s]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Search */}
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-2.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setOffset(0); }}
+                placeholder="Search reference or client…"
+                className="h-9 pl-8 pr-8 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 w-56"
+                data-testid="input-search"
+              />
+              {search && (
+                <button onClick={() => { setSearch(""); setOffset(0); }} className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground">
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            <Select value={status} onValueChange={(v) => { setStatus(v === "all" ? "" : v); setOffset(0); }}>
+              <SelectTrigger className="w-44 h-9 text-sm" data-testid="select-status">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>{ORDER_STATUS_LABELS[s]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Status Pipeline */}

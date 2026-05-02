@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Users, AlertCircle, FileText } from "lucide-react";
+import { ArrowLeft, Package, Users, AlertCircle, FileText, Check } from "lucide-react";
 import { useGetOrder, getGetOrderQueryKey, useCancelOrder } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, formatDateTime, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/format";
@@ -157,21 +157,42 @@ export default function OrderDetail() {
 
           {/* Status Timeline */}
           {o.status !== "cancelled" && (
-            <div className="mt-6 overflow-x-auto">
-              <div className="flex items-center gap-0 min-w-max">
+            <div className="mt-6 overflow-x-auto pb-1">
+              <div className="flex items-start min-w-max gap-0">
                 {STATUS_STEPS.map((step, i) => {
                   const done = i < currentStep;
                   const active = i === currentStep;
                   return (
-                    <div key={step} className="flex items-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <div className={`w-3 h-3 rounded-full border-2 transition-all ${done ? "bg-primary border-primary" : active ? "bg-primary/80 border-primary" : "bg-background border-border"}`} data-testid={`step-${step}`} />
-                        <span className={`text-[10px] font-medium ${active ? "text-primary" : done ? "text-muted-foreground" : "text-muted-foreground/50"}`}>
+                    <div key={step} className="flex items-start">
+                      {/* Step node + label */}
+                      <div className="flex flex-col items-center gap-1.5" style={{ minWidth: 72 }}>
+                        <div className={`relative w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
+                          done
+                            ? "bg-primary border-primary text-primary-foreground"
+                            : active
+                            ? "bg-primary/10 border-primary text-primary"
+                            : "bg-background border-border text-muted-foreground/40"
+                        }`} data-testid={`step-${step}`}>
+                          {done ? (
+                            <Check size={14} strokeWidth={2.5} />
+                          ) : active ? (
+                            <>
+                              <span className="w-2.5 h-2.5 rounded-full bg-primary block" />
+                              <span className="absolute inset-0 rounded-full border-2 border-primary animate-ping opacity-30" />
+                            </>
+                          ) : (
+                            <span className="text-[10px] font-bold">{i + 1}</span>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-medium text-center leading-tight max-w-[64px] ${
+                          active ? "text-primary" : done ? "text-muted-foreground" : "text-muted-foreground/40"
+                        }`}>
                           {ORDER_STATUS_LABELS[step]}
                         </span>
                       </div>
+                      {/* Connector */}
                       {i < STATUS_STEPS.length - 1 && (
-                        <div className={`h-0.5 w-10 mb-4 ${i < currentStep ? "bg-primary" : "bg-border"}`} />
+                        <div className={`h-0.5 flex-1 mt-4 mx-1 transition-colors duration-300 ${i < currentStep ? "bg-primary" : "bg-border"}`} style={{ minWidth: 20 }} />
                       )}
                     </div>
                   );

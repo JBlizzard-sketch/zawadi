@@ -7,17 +7,28 @@ import {
   productsTable,
   recipientsTable,
 } from "@workspace/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, ilike, or, inArray } from "drizzle-orm";
 
 const VAT_RATE = 0.16;
 const router = Router();
 
 router.get("/orders", async (req, res) => {
   try {
-    const { corporate_id, status, limit = "20", offset = "0" } = req.query as Record<string, string>;
+    const { corporate_id, status, search, limit = "20", offset = "0" } = req.query as Record<string, string>;
     const conditions = [];
     if (corporate_id) conditions.push(eq(ordersTable.corporateId, corporate_id));
     if (status) conditions.push(eq(ordersTable.status, status as any));
+    if (search) {
+      const corpMatches = await db
+        .select({ id: corporatesTable.id })
+        .from(corporatesTable)
+        .where(ilike(corporatesTable.name, `%${search}%`));
+      const corpIds = corpMatches.map((c) => c.id);
+      const searchCond = corpIds.length > 0
+        ? or(ilike(ordersTable.reference, `%${search}%`), inArray(ordersTable.corporateId, corpIds))
+        : ilike(ordersTable.reference, `%${search}%`);
+      conditions.push(searchCond!);
+    }
 
     const [items, [{ count }]] = await Promise.all([
       db.select().from(ordersTable)
