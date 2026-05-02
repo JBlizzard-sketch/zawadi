@@ -33,7 +33,7 @@ function exportCSV(rows: any[]) {
 
 export default function Invoices() {
   const [, setLocation] = useLocation();
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(() => new URLSearchParams(window.location.search).get("status") ?? "");
 
   const params = { status: status || undefined };
   const { data: invoices, isLoading } = useListInvoices(params, { query: { queryKey: getListInvoicesQueryKey(params) } });

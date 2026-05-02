@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Clock, MapPin, Tag, ShoppingCart, Gift, Star, Leaf, Pencil, X, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Package, Clock, MapPin, Tag, ShoppingCart, Gift, Star, Leaf, Pencil, X, Plus, Trash2, ImagePlus, CheckCircle2 } from "lucide-react";
 import { useGetProduct, getGetProductQueryKey, useListCategories, getListCategoriesQueryKey, useListSuppliers, getListSuppliersQueryKey } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES } from "@/lib/format";
@@ -34,6 +34,12 @@ export default function ProductDetail() {
   const [tiers, setTiers] = useState<TierRow[]>([]);
   const [saveError, setSaveError] = useState("");
 
+  // Image management
+  const [showAddImage, setShowAddImage] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageAlt, setImageAlt] = useState("");
+  const [imageError, setImageError] = useState("");
+
   const { data: product, isLoading } = useGetProduct(id, { query: { enabled: !!id, queryKey: getGetProductQueryKey(id) } });
   const { data: categories } = useListCategories({ query: { queryKey: getListCategoriesQueryKey(), enabled: showEdit } });
   const { data: suppliersData } = useListSuppliers(undefined, { query: { queryKey: getListSuppliersQueryKey(), enabled: showEdit } });
@@ -58,6 +64,40 @@ export default function ProductDetail() {
     onError: (e: any) => setSaveError(e.message ?? "Something went wrong."),
   });
 
+  const addImage = useMutation({
+    mutationFn: async ({ url, alt, isPrimary }: { url: string; alt: string; isPrimary: boolean }) => {
+      const res = await fetch(`${BASE}/api/products/${id}/images`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, alt: alt || null, isPrimary }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "Failed to add image"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getGetProductQueryKey(id) });
+      setImageUrl(""); setImageAlt(""); setShowAddImage(false); setImageError("");
+    },
+    onError: (e: any) => setImageError(e.message ?? "Failed to add image."),
+  });
+
+  const setPrimaryImage = useMutation({
+    mutationFn: async (imageId: string) => {
+      const res = await fetch(`${BASE}/api/products/${id}/images/${imageId}/primary`, { method: "PUT" });
+      if (!res.ok) throw new Error("Failed to set primary");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetProductQueryKey(id) }),
+  });
+
+  const deleteImage = useMutation({
+    mutationFn: async (imageId: string) => {
+      const res = await fetch(`${BASE}/api/products/${id}/images/${imageId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete image");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetProductQueryKey(id) }),
+  });
+
   const openEdit = () => {
     if (!product) return;
     const p = product as any;
@@ -71,6 +111,7 @@ export default function ProductDetail() {
       leadTimeDays: String(p.leadTimeDays ?? 7),
       origin: p.origin ?? "",
       description: p.description ?? "",
+      isActive: String(p.isActive ?? true),
     });
     setTiers(
       (p.bulkTiers ?? []).map((t: any) => ({
@@ -97,6 +138,7 @@ export default function ProductDetail() {
       unitPrice: editForm.unitPrice,
       moq: parseInt(editForm.moq) || 1,
       leadTimeDays: parseInt(editForm.leadTimeDays) || 7,
+      isActive: editForm.isActive !== "false",
       bulkTiers: validTiers,
     });
   };
@@ -162,6 +204,91 @@ export default function ProductDetail() {
                   <span className="inline-flex items-center gap-1 bg-primary text-primary-foreground text-[11px] font-semibold px-2.5 py-1 rounded-full shadow-sm">
                     <Star size={10} fill="currentColor" /> Featured
                   </span>
+                </div>
+              )}
+            </div>
+
+            {/* Image Gallery Management */}
+            <div className="bg-card border border-card-border rounded-xl p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Images</p>
+                <button
+                  onClick={() => { setShowAddImage(v => !v); setImageError(""); }}
+                  className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  data-testid="button-add-image"
+                >
+                  <ImagePlus size={11} /> Add Image
+                </button>
+              </div>
+
+              {showAddImage && (
+                <div className="mb-3 p-3 bg-muted/40 rounded-lg space-y-2">
+                  <Input
+                    placeholder="Image URL (https://…)"
+                    value={imageUrl}
+                    onChange={e => setImageUrl(e.target.value)}
+                    className="h-8 text-xs"
+                    data-testid="input-image-url"
+                  />
+                  <Input
+                    placeholder="Alt text (optional)"
+                    value={imageAlt}
+                    onChange={e => setImageAlt(e.target.value)}
+                    className="h-8 text-xs"
+                    data-testid="input-image-alt"
+                  />
+                  {imageError && <p className="text-xs text-red-600">{imageError}</p>}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs flex-1"
+                      disabled={!imageUrl.trim() || addImage.isPending}
+                      onClick={() => {
+                        if (!imageUrl.trim()) return;
+                        const isFirst = (p.images ?? []).length === 0;
+                        addImage.mutate({ url: imageUrl.trim(), alt: imageAlt.trim(), isPrimary: isFirst });
+                      }}
+                      data-testid="button-save-image"
+                    >
+                      {addImage.isPending ? "Adding…" : "Add Image"}
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAddImage(false)}>Cancel</Button>
+                  </div>
+                </div>
+              )}
+
+              {(p.images ?? []).length === 0 ? (
+                <p className="text-xs text-muted-foreground/60 italic">No images added yet.</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {(p.images ?? []).map((img: any) => (
+                    <div key={img.id} className="relative group rounded-lg overflow-hidden border border-border aspect-square bg-muted/30">
+                      <img src={img.url} alt={img.alt ?? ""} className="w-full h-full object-cover" />
+                      {img.isPrimary && (
+                        <div className="absolute top-1 left-1">
+                          <CheckCircle2 size={14} className="text-primary drop-shadow" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1">
+                        {!img.isPrimary && (
+                          <button
+                            onClick={() => setPrimaryImage.mutate(img.id)}
+                            className="text-[10px] font-semibold text-white bg-primary/90 rounded px-1.5 py-0.5 hover:bg-primary w-full text-center"
+                            data-testid={`button-set-primary-${img.id}`}
+                          >
+                            Set Primary
+                          </button>
+                        )}
+                        <button
+                          onClick={() => deleteImage.mutate(img.id)}
+                          className="text-[10px] font-semibold text-white bg-red-600/80 rounded px-1.5 py-0.5 hover:bg-red-600 w-full text-center"
+                          data-testid={`button-delete-image-${img.id}`}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -442,6 +569,22 @@ export default function ProductDetail() {
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* Active status toggle */}
+              <div className="pt-2 border-t border-border flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">Product Status</p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">Inactive products are hidden from the catalogue</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditForm(f => ({ ...f, isActive: f.isActive === "false" ? "true" : "false" }))}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline-none ${editForm.isActive === "false" ? "bg-muted-foreground/30" : "bg-primary"}`}
+                  data-testid="toggle-is-active"
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${editForm.isActive === "false" ? "translate-x-0.5" : "translate-x-4"}`} />
+                </button>
               </div>
 
               {saveError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>}

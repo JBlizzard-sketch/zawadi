@@ -102,4 +102,60 @@ router.delete("/products/:id", async (req, res) => {
   }
 });
 
+// Product image management
+router.post("/products/:id/images", async (req, res) => {
+  try {
+    const { url, alt, isPrimary } = req.body;
+    if (!url) { res.status(400).json({ error: "url is required" }); return; }
+
+    if (isPrimary) {
+      await db.update(productImagesTable)
+        .set({ isPrimary: false })
+        .where(eq(productImagesTable.productId, req.params.id));
+    }
+
+    const [image] = await db.insert(productImagesTable).values({
+      productId: req.params.id,
+      url,
+      alt: alt ?? null,
+      isPrimary: isPrimary ?? false,
+    }).returning();
+
+    res.status(201).json(image);
+  } catch (err) {
+    req.log.error(err);
+    res.status(400).json({ error: "Failed to add image", details: String(err) });
+  }
+});
+
+router.put("/products/:id/images/:imageId/primary", async (req, res) => {
+  try {
+    await db.update(productImagesTable)
+      .set({ isPrimary: false })
+      .where(eq(productImagesTable.productId, req.params.id));
+
+    const [updated] = await db.update(productImagesTable)
+      .set({ isPrimary: true })
+      .where(and(eq(productImagesTable.id, req.params.imageId), eq(productImagesTable.productId, req.params.id)))
+      .returning();
+
+    if (!updated) { res.status(404).json({ error: "Image not found" }); return; }
+    res.json(updated);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to set primary image" });
+  }
+});
+
+router.delete("/products/:id/images/:imageId", async (req, res) => {
+  try {
+    await db.delete(productImagesTable)
+      .where(and(eq(productImagesTable.id, req.params.imageId), eq(productImagesTable.productId, req.params.id)));
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to delete image" });
+  }
+});
+
 export default router;

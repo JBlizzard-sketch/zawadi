@@ -36,6 +36,7 @@ export default function Catalogue() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [supplierId, setSupplierId] = useState("");
   const [occasion, setOccasion] = useState("");
   const [offset, setOffset] = useState(0);
   const limit = 12;
@@ -48,6 +49,7 @@ export default function Catalogue() {
   const params = {
     search: search || undefined,
     category_id: categoryId || undefined,
+    supplier_id: supplierId || undefined,
     occasion: occasion || undefined,
     limit,
     offset,
@@ -55,7 +57,7 @@ export default function Catalogue() {
 
   const { data: productsData, isLoading } = useListProducts(params, { query: { queryKey: getListProductsQueryKey(params) } });
   const { data: categories } = useListCategories({ query: { queryKey: getListCategoriesQueryKey() } });
-  const { data: suppliersData } = useListSuppliers(undefined, { query: { queryKey: getListSuppliersQueryKey(), enabled: showModal } });
+  const { data: suppliersData } = useListSuppliers(undefined, { query: { queryKey: getListSuppliersQueryKey() } });
 
   const products = (productsData as any)?.items ?? [];
   const total = (productsData as any)?.total ?? 0;
@@ -141,6 +143,17 @@ export default function Catalogue() {
               <SelectItem value="all">All categories</SelectItem>
               {categoryList.map((c: any) => (
                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={supplierId} onValueChange={(v) => { setSupplierId(v === "all" ? "" : v); setOffset(0); }}>
+            <SelectTrigger className="w-44 h-9 text-sm" data-testid="select-supplier">
+              <SelectValue placeholder="All suppliers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All suppliers</SelectItem>
+              {supplierList.map((s: any) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>

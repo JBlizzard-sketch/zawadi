@@ -28,7 +28,7 @@ interface LineItem { productId: string; productName: string; unitPrice: number; 
 export default function Quotes() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(() => new URLSearchParams(window.location.search).get("status") ?? "");
 
   const [showModal, setShowModal] = useState(false);
   const [modalCorporateId, setModalCorporateId] = useState("");
