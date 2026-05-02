@@ -67,7 +67,7 @@ export default function Collections() {
                   {/* Cover */}
                   <div className={`h-44 bg-gradient-to-br ${BG_GRADIENTS[i % BG_GRADIENTS.length]} flex items-center justify-center relative`}>
                     <BookOpen size={36} className="text-muted-foreground/20" />
-                    {col.is_featured && (
+                    {col.isFeatured && (
                       <div className="absolute top-3 left-3">
                         <span className="bg-primary text-primary-foreground text-[10px] font-semibold px-2.5 py-1 rounded-full">Featured</span>
                       </div>
@@ -86,9 +86,9 @@ export default function Collections() {
                     )}
                     <div className="flex items-center justify-between mt-4">
                       <div>
-                        <p className="text-xs text-muted-foreground">{col.product_count} products</p>
+                        <p className="text-xs text-muted-foreground">{col.productCount} products</p>
                         <p className="text-sm font-bold text-primary mt-0.5">
-                          {formatKES(col.min_price)} {col.max_price ? `— ${formatKES(col.max_price)}` : "+"}
+                          {formatKES(col.minPrice)} {col.maxPrice ? `— ${formatKES(col.maxPrice)}` : "+"}
                         </p>
                       </div>
                       <ArrowRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />

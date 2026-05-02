@@ -70,9 +70,9 @@ export default function QuoteDetail() {
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Quote</p>
               <h1 className="text-lg font-serif font-semibold text-foreground" data-testid="text-quote-id">{q.id.slice(0, 8).toUpperCase()}</h1>
               <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                <span>Created {formatDate(q.created_at)}</span>
+                <span>Created {formatDate(q.createdAt)}</span>
                 <span>·</span>
-                <span>Valid until {formatDate(q.valid_until)}</span>
+                <span>Valid until {formatDate(q.validUntil)}</span>
               </div>
             </div>
             <div className="flex items-center gap-3">

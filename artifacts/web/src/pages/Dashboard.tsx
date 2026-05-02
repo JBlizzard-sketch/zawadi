@@ -136,7 +136,7 @@ export default function Dashboard() {
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{order.reference}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(order.created_at)}</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <StatusBadge label={ORDER_STATUS_LABELS[order.status] ?? order.status} colorClass={ORDER_STATUS_COLORS[order.status] ?? ""} />

@@ -59,8 +59,8 @@ export default function CollectionDetail() {
           <h1 className="text-3xl font-serif font-semibold text-foreground mb-3" data-testid="text-collection-name">{col.name}</h1>
           {col.description && <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">{col.description}</p>}
           <div className="flex items-center gap-4 mt-4">
-            <span className="text-sm font-bold text-primary">{formatKES(col.min_price)} {col.max_price ? `— ${formatKES(col.max_price)}` : "+"}</span>
-            <span className="text-sm text-muted-foreground">{col.product_count} products</span>
+            <span className="text-sm font-bold text-primary">{formatKES(col.minPrice)} {col.maxPrice ? `— ${formatKES(col.maxPrice)}` : "+"}</span>
+            <span className="text-sm text-muted-foreground">{col.productCount} products</span>
           </div>
         </div>
 
@@ -81,7 +81,7 @@ export default function CollectionDetail() {
                   <div className="p-3">
                     <p className="text-xs font-semibold text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors">{product.name}</p>
                     <p className="text-xs text-muted-foreground">{product.origin}</p>
-                    <p className="text-sm font-bold text-primary mt-1">{formatKES(product.unit_price)}</p>
+                    <p className="text-sm font-bold text-primary mt-1">{formatKES(product.unitPrice)}</p>
                   </div>
               </Link>
             ))}

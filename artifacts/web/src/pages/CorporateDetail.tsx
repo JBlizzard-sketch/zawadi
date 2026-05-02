@@ -73,8 +73,8 @@ export default function CorporateDetail() {
                 <p className="text-sm text-muted-foreground">{c.industry ?? "—"}</p>
                 <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${TIER_COLORS[c.tier] ?? ""}`}>{TIER_LABELS[c.tier] ?? c.tier}</span>
-                  {c.payment_terms && <span className="text-xs text-muted-foreground">{PAYMENT_LABELS[c.payment_terms] ?? c.payment_terms}</span>}
-                  {c.kra_pin && <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">KRA: {c.kra_pin}</span>}
+                  {c.paymentTerms && <span className="text-xs text-muted-foreground">{PAYMENT_LABELS[c.paymentTerms] ?? c.paymentTerms}</span>}
+                  {c.kraPin && <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">KRA: {c.kraPin}</span>}
                 </div>
               </div>
             </div>
@@ -91,8 +91,8 @@ export default function CorporateDetail() {
                   <span className="text-foreground">{c.phone}</span>
                 </div>
               )}
-              {c.account_manager_name && (
-                <p className="text-xs text-muted-foreground">AM: {c.account_manager_name}</p>
+              {c.accountManagerName && (
+                <p className="text-xs text-muted-foreground">AM: {c.accountManagerName}</p>
               )}
             </div>
           </div>
@@ -149,9 +149,7 @@ export default function CorporateDetail() {
           <div className="lg:col-span-2 bg-card border border-card-border rounded-xl overflow-hidden shadow-sm">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <p className="text-sm font-semibold text-foreground">Recent Orders</p>
-              <Link href={`/orders`}>
-                <a className="text-xs text-primary hover:underline" data-testid="link-all-orders">View all</a>
-              </Link>
+              <Link href={`/orders`} className="text-xs text-primary hover:underline" data-testid="link-all-orders">View all</Link>
             </div>
             {dashLoading ? (
               <div className="p-4 space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
@@ -160,14 +158,12 @@ export default function CorporateDetail() {
             ) : (
               <div className="divide-y divide-border">
                 {(d?.recent_orders ?? []).map((order: any) => (
-                  <Link key={order.id} href={`/orders/${order.id}`}>
-                    <a className="flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors" data-testid={`order-row-${order.id}`}>
+                  <Link key={order.id} href={`/orders/${order.id}`} className="flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors" data-testid={`order-row-${order.id}`}>
                       <div>
                         <p className="text-xs font-medium text-foreground">{order.reference}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(order.created_at)}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</p>
                       </div>
                       <StatusBadge label={ORDER_STATUS_LABELS[order.status] ?? order.status} colorClass={ORDER_STATUS_COLORS[order.status] ?? ""} />
-                    </a>
                   </Link>
                 ))}
               </div>

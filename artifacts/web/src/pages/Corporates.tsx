@@ -101,8 +101,8 @@ export default function Corporates() {
                         {TIER_LABELS[corp.tier] ?? corp.tier}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-right text-muted-foreground hidden lg:table-cell">{corp.total_orders}</td>
-                    <td className="px-5 py-3 text-right font-semibold text-foreground tabular-nums">{formatKES(corp.total_spend)}</td>
+                    <td className="px-5 py-3 text-right text-muted-foreground hidden lg:table-cell">{corp.totalOrders}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-foreground tabular-nums">{formatKES(corp.totalSpend)}</td>
                     <td className="px-5 py-3"><ChevronRight size={14} className="text-muted-foreground" /></td>
                   </tr>
                 ))

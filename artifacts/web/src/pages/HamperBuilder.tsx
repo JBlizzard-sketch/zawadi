@@ -37,7 +37,7 @@ export default function HamperBuilder() {
       if (existing) {
         return prev.map((i) => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return [...prev, { productId: product.id, name: product.name, unitPrice: parseFloat(product.unit_price), quantity: 1, origin: product.origin }];
+      return [...prev, { productId: product.id, name: product.name, unitPrice: parseFloat(product.unitPrice), quantity: 1, origin: product.origin }];
     });
   };
 
@@ -122,7 +122,7 @@ export default function HamperBuilder() {
                       <p className="text-xs font-semibold text-foreground line-clamp-2 leading-snug">{product.name}</p>
                       <p className="text-xs text-muted-foreground">{product.origin}</p>
                       <div className="flex items-center justify-between mt-auto pt-1">
-                        <span className="text-xs font-bold text-primary">{formatKES(product.unit_price)}</span>
+                        <span className="text-xs font-bold text-primary">{formatKES(product.unitPrice)}</span>
                         <button
                           onClick={() => addProduct(product)}
                           className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-all ${inHamper ? "bg-primary/10 text-primary" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}

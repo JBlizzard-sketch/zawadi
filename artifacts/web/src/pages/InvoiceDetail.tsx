@@ -57,7 +57,7 @@ export default function InvoiceDetail() {
                   <FileText size={16} className="text-primary" />
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Tax Invoice</p>
                 </div>
-                <h1 className="text-xl font-serif font-semibold text-foreground font-mono" data-testid="text-invoice-number">{inv.invoice_number}</h1>
+                <h1 className="text-xl font-serif font-semibold text-foreground font-mono" data-testid="text-invoice-number">{inv.invoiceNumber}</h1>
               </div>
               <StatusBadge label={INVOICE_STATUS_LABELS[inv.status] ?? inv.status} colorClass={INVOICE_STATUS_COLORS[inv.status] ?? ""} />
             </div>
@@ -69,22 +69,22 @@ export default function InvoiceDetail() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Issued</p>
-                <p className="font-medium text-foreground">{formatDate(inv.created_at)}</p>
+                <p className="font-medium text-foreground">{formatDate(inv.createdAt)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Due Date</p>
-                <p className="font-medium text-foreground">{formatDate(inv.due_date)}</p>
+                <p className="font-medium text-foreground">{formatDate(inv.dueDate)}</p>
               </div>
-              {inv.kra_pin && (
+              {inv.kraPin && (
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">KRA PIN</p>
-                  <p className="font-mono text-sm font-medium text-foreground" data-testid="text-kra-pin">{inv.kra_pin}</p>
+                  <p className="font-mono text-sm font-medium text-foreground" data-testid="text-kra-pin">{inv.kraPin}</p>
                 </div>
               )}
-              {inv.paid_at && (
+              {inv.paidAt && (
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Paid On</p>
-                  <p className="font-medium text-green-700">{formatDate(inv.paid_at)}</p>
+                  <p className="font-medium text-green-700">{formatDate(inv.paidAt)}</p>
                 </div>
               )}
             </div>
@@ -98,11 +98,11 @@ export default function InvoiceDetail() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">VAT @ 16% (KRA)</span>
-                <span className="font-medium" data-testid="text-vat-amount">{formatKES(inv.vat_amount)}</span>
+                <span className="font-medium" data-testid="text-vat-amount">{formatKES(inv.vatAmount)}</span>
               </div>
               <div className="flex justify-between border-t border-border pt-3">
                 <span className="font-semibold text-foreground">Total Payable</span>
-                <span className="font-bold text-primary text-lg" data-testid="text-total-amount">{formatKES(inv.total_amount)}</span>
+                <span className="font-bold text-primary text-lg" data-testid="text-total-amount">{formatKES(inv.totalAmount)}</span>
               </div>
             </div>
 

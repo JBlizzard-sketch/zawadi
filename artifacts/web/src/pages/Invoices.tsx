@@ -82,15 +82,15 @@ export default function Invoices() {
                     data-testid={`row-invoice-${inv.id}`}
                   >
                     <td className="px-5 py-3">
-                      <p className="font-semibold text-foreground font-mono text-xs">{inv.invoice_number}</p>
-                      {inv.kra_pin && <p className="text-xs text-muted-foreground">KRA: {inv.kra_pin}</p>}
+                      <p className="font-semibold text-foreground font-mono text-xs">{inv.invoiceNumber}</p>
+                      {inv.kraPin && <p className="text-xs text-muted-foreground">KRA: {inv.kraPin}</p>}
                     </td>
-                    <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(inv.created_at)}</td>
-                    <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(inv.due_date)}</td>
+                    <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(inv.createdAt)}</td>
+                    <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(inv.dueDate)}</td>
                     <td className="px-5 py-3">
                       <StatusBadge label={INVOICE_STATUS_LABELS[inv.status] ?? inv.status} colorClass={INVOICE_STATUS_COLORS[inv.status] ?? ""} />
                     </td>
-                    <td className="px-5 py-3 text-right font-semibold text-foreground tabular-nums">{formatKES(inv.total_amount)}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-foreground tabular-nums">{formatKES(inv.totalAmount)}</td>
                     <td className="px-5 py-3"><ChevronRight size={14} className="text-muted-foreground" /></td>
                   </tr>
                 ))

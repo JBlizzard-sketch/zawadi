@@ -43,7 +43,7 @@ export default function ProductDetail() {
   }
 
   const p = product as any;
-  const bulkTiers: { min_qty: number; price_per_unit: number }[] = p.bulk_tiers ?? [];
+  const bulkTiers: { min_qty: number; price_per_unit: number }[] = p.bulkTiers ?? [];
 
   return (
     <Layout>
@@ -82,7 +82,7 @@ export default function ProductDetail() {
                 <Tag size={14} className="text-primary mt-0.5" />
                 <div>
                   <p className="text-xs text-muted-foreground">Unit Price</p>
-                  <p className="text-sm font-bold text-foreground" data-testid="text-unit-price">{formatKES(p.unit_price)}</p>
+                  <p className="text-sm font-bold text-foreground" data-testid="text-unit-price">{formatKES(p.unitPrice)}</p>
                 </div>
               </div>
               <div className="bg-muted/50 rounded-lg p-3 flex items-start gap-2">
@@ -96,7 +96,7 @@ export default function ProductDetail() {
                 <Clock size={14} className="text-primary mt-0.5" />
                 <div>
                   <p className="text-xs text-muted-foreground">Lead Time</p>
-                  <p className="text-sm font-bold text-foreground">{p.lead_time_days} days</p>
+                  <p className="text-sm font-bold text-foreground">{p.leadTimeDays} days</p>
                 </div>
               </div>
               <div className="bg-muted/50 rounded-lg p-3 flex items-start gap-2">

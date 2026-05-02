@@ -82,7 +82,7 @@ export default function Suppliers() {
               <Link key={supplier.id} href={`/suppliers/${supplier.id}`} className="group block bg-card border border-card-border rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5" data-testid={`card-supplier-${supplier.id}`}>
                   <div className="h-36 bg-gradient-to-br from-stone-100 to-amber-50 flex items-center justify-center relative">
                     <Layers size={32} className="text-muted-foreground/20" />
-                    {supplier.is_verified && (
+                    {supplier.isVerified && (
                       <div className="absolute top-3 right-3">
                         <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-green-200">
                           <CheckCircle2 size={9} /> Verified

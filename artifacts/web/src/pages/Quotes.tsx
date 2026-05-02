@@ -85,8 +85,8 @@ export default function Quotes() {
                       <p className="font-semibold text-foreground text-xs">{quote.id.slice(0, 8).toUpperCase()}</p>
                       <p className="text-xs text-muted-foreground">{(quote.items as any[])?.length ?? 0} line item{(quote.items as any[])?.length !== 1 ? "s" : ""}</p>
                     </td>
-                    <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(quote.created_at)}</td>
-                    <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(quote.valid_until)}</td>
+                    <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(quote.createdAt)}</td>
+                    <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(quote.validUntil)}</td>
                     <td className="px-5 py-3">
                       <StatusBadge label={QUOTE_STATUS_LABELS[quote.status] ?? quote.status} colorClass={QUOTE_STATUS_COLORS[quote.status] ?? ""} />
                     </td>

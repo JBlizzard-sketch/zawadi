@@ -53,7 +53,7 @@ export default function SupplierDetail() {
                   <span className="text-sm text-muted-foreground">{s.county}, Kenya</span>
                 </div>
               </div>
-              {s.is_verified && (
+              {s.isVerified && (
                 <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-semibold px-3 py-1.5 rounded-full border border-green-200">
                   <CheckCircle2 size={12} /> Verified Supplier
                 </span>
@@ -84,10 +84,10 @@ export default function SupplierDetail() {
             <div className="bg-card border border-card-border rounded-xl p-5 shadow-sm">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Contact</p>
               <div className="space-y-3">
-                {s.contact_name && (
+                {s.contactName && (
                   <div>
                     <p className="text-xs text-muted-foreground">Contact Person</p>
-                    <p className="text-sm font-medium text-foreground">{s.contact_name}</p>
+                    <p className="text-sm font-medium text-foreground">{s.contactName}</p>
                   </div>
                 )}
                 {s.email && (
@@ -107,8 +107,8 @@ export default function SupplierDetail() {
 
             <div className="bg-card border border-card-border rounded-xl p-5 shadow-sm">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Onboarding Status</p>
-              <p className="text-sm font-medium capitalize text-foreground">{s.onboarding_status?.replace("_", " ")}</p>
-              <p className="text-xs text-muted-foreground mt-1">Member since {new Date(s.created_at).getFullYear()}</p>
+              <p className="text-sm font-medium capitalize text-foreground">{s.onboardingStatus?.replace("_", " ")}</p>
+              <p className="text-xs text-muted-foreground mt-1">Member since {new Date(s.createdAt).getFullYear()}</p>
             </div>
           </div>
         </div>

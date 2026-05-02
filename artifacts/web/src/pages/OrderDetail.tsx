@@ -66,7 +66,7 @@ export default function OrderDetail() {
           <div className="flex items-start justify-between flex-wrap gap-4">
             <div>
               <h1 className="text-xl font-serif font-semibold text-foreground" data-testid="text-order-reference">{o.reference}</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">{formatDateTime(o.created_at)}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">{formatDateTime(o.createdAt)}</p>
             </div>
             <div className="flex items-center gap-3">
               <StatusBadge label={ORDER_STATUS_LABELS[o.status] ?? o.status} colorClass={ORDER_STATUS_COLORS[o.status] ?? ""} />
@@ -129,12 +129,12 @@ export default function OrderDetail() {
                   {(o.items as any[]).map((item: any) => (
                     <tr key={item.id} data-testid={`row-item-${item.id}`}>
                       <td className="px-5 py-3">
-                        <p className="font-medium text-foreground">{item.product_name}</p>
-                        {item.branded_packaging && <span className="text-[10px] text-primary">Branded packaging</span>}
+                        <p className="font-medium text-foreground">{item.productName}</p>
+                        {item.brandedPackaging && <span className="text-[10px] text-primary">Branded packaging</span>}
                       </td>
                       <td className="px-5 py-3 text-right text-muted-foreground">{item.quantity}</td>
-                      <td className="px-5 py-3 text-right text-muted-foreground">{formatKES(item.unit_price)}</td>
-                      <td className="px-5 py-3 text-right font-semibold text-foreground">{formatKES(item.line_total)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground">{formatKES(item.unitPrice)}</td>
+                      <td className="px-5 py-3 text-right font-semibold text-foreground">{formatKES(item.lineTotal)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -165,26 +165,24 @@ export default function OrderDetail() {
 
             {/* Delivery & Recipients */}
             <div className="bg-card border border-card-border rounded-xl p-5 shadow-sm space-y-3">
-              {o.delivery_address && (
+              {o.deliveryAddress && (
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Delivery Address</p>
-                  <p className="text-sm text-foreground">{o.delivery_address}</p>
+                  <p className="text-sm text-foreground">{o.deliveryAddress}</p>
                 </div>
               )}
-              {o.delivery_date && (
+              {o.deliveryDate && (
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Delivery Date</p>
-                  <p className="text-sm text-foreground">{formatDate(o.delivery_date)}</p>
+                  <p className="text-sm text-foreground">{formatDate(o.deliveryDate)}</p>
                 </div>
               )}
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Recipients</p>
-                  <p className="text-sm font-semibold text-foreground flex items-center gap-1"><Users size={13} /> {o.recipient_count ?? 0}</p>
+                  <p className="text-sm font-semibold text-foreground flex items-center gap-1"><Users size={13} /> {o.recipientCount ?? 0}</p>
                 </div>
-                <Link href={`/orders/${id}/recipients`}>
-                  <a className="text-xs font-medium text-primary hover:underline" data-testid="link-manage-recipients">Manage →</a>
-                </Link>
+                <Link href={`/orders/${id}/recipients`} className="text-xs font-medium text-primary hover:underline" data-testid="link-manage-recipients">Manage →</Link>
               </div>
             </div>
 

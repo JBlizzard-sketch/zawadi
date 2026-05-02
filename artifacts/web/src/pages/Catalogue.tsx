@@ -116,7 +116,7 @@ export default function Catalogue() {
                   {/* Image placeholder */}
                   <div className="h-44 bg-gradient-to-br from-amber-50 to-stone-100 flex items-center justify-center relative overflow-hidden">
                     <Package size={32} className="text-muted-foreground/20" />
-                    {product.is_featured && (
+                    {product.isFeatured && (
                       <div className="absolute top-2 right-2">
                         <span className="inline-flex items-center gap-1 bg-primary text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full">
                           <Star size={9} fill="currentColor" /> Featured
@@ -128,11 +128,11 @@ export default function Catalogue() {
                     <p className="text-sm font-semibold text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors">{product.name}</p>
                     <p className="text-xs text-muted-foreground mb-2">{product.origin}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold text-primary">{formatKES(product.unit_price)}</span>
+                      <span className="text-sm font-bold text-primary">{formatKES(product.unitPrice)}</span>
                       <span className="text-xs text-muted-foreground">MOQ {product.moq}</span>
                     </div>
-                    {product.lead_time_days && (
-                      <p className="text-[11px] text-muted-foreground/70 mt-1">{product.lead_time_days}d lead time</p>
+                    {product.leadTimeDays && (
+                      <p className="text-[11px] text-muted-foreground/70 mt-1">{product.leadTimeDays}d lead time</p>
                     )}
                   </div>
               </Link>

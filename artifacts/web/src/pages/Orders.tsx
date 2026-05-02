@@ -114,11 +114,11 @@ export default function Orders() {
                       <p className="font-semibold text-foreground">{order.reference}</p>
                       {order.corporate_name && <p className="text-xs text-muted-foreground">{order.corporate_name}</p>}
                     </td>
-                    <td className="px-5 py-3 text-muted-foreground hidden md:table-cell">{formatDate(order.created_at)}</td>
+                    <td className="px-5 py-3 text-muted-foreground hidden md:table-cell">{formatDate(order.createdAt)}</td>
                     <td className="px-5 py-3">
                       <StatusBadge label={ORDER_STATUS_LABELS[order.status] ?? order.status} colorClass={ORDER_STATUS_COLORS[order.status] ?? ""} />
                     </td>
-                    <td className="px-5 py-3 text-right text-muted-foreground hidden lg:table-cell">{order.recipient_count ?? 0}</td>
+                    <td className="px-5 py-3 text-right text-muted-foreground hidden lg:table-cell">{order.recipientCount ?? 0}</td>
                     <td className="px-5 py-3 text-right font-semibold text-foreground tabular-nums">{formatKES(order.total)}</td>
                     <td className="px-5 py-3">
                       <ChevronRight size={14} className="text-muted-foreground" />
