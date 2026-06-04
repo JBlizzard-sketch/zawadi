@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ClipboardList, Plus, X, Search, ChevronRight, Trash2 } from "lucide-react";
+import { ClipboardList, Plus, X, Search, ChevronRight, Trash2, Download } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,6 +10,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Layout from "@/components/layout/Layout";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function exportCSV(rows: any[]) {
+  const headers = ["PO Number", "Supplier", "Status", "Total (KES)", "Expected Date", "Created"];
+  const lines = rows.map((p: any) => [
+    p.poNumber ?? p.id.slice(0, 8).toUpperCase(),
+    p.supplierName ?? "",
+    p.status,
+    Number(p.total ?? 0).toFixed(2),
+    p.expectedDate ? new Date(p.expectedDate).toISOString().slice(0, 10) : "",
+    p.createdAt ? new Date(p.createdAt).toISOString().slice(0, 10) : "",
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`));
+  const csv = [headers.map((h) => `"${h}"`).join(","), ...lines.map((l) => l.join(","))].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = `zawadi-purchase-orders-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
 
 const PO_STATUSES = ["draft", "sent", "acknowledged", "received", "cancelled"];
 const PO_STATUS_LABELS: Record<string, string> = {
@@ -170,6 +187,9 @@ export default function PurchaseOrders() {
                 {PO_STATUSES.map((s) => <SelectItem key={s} value={s}>{PO_STATUS_LABELS[s]}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => exportCSV(poList)} data-testid="button-export-csv">
+              <Download size={13} /> Export CSV
+            </Button>
             <Button size="sm" className="gap-2 h-9" onClick={openModal}>
               <Plus size={14} /> New PO
             </Button>

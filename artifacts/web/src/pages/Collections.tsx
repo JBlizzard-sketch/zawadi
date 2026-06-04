@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { BookOpen, ArrowRight, Plus, X, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, ArrowRight, Plus, X, Pencil, Trash2, Download } from "lucide-react";
 import { useListCollections, getListCollectionsQueryKey } from "@workspace/api-client-react";
 import { formatKES } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,6 +11,19 @@ import { useQueryClient } from "@tanstack/react-query";
 import Layout from "@/components/layout/Layout";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function exportCSV(rows: any[]) {
+  const headers = ["Name", "Occasion", "Featured", "Description", "Products"];
+  const lines = rows.map((c: any) => [
+    c.name, c.occasion ?? "", c.isFeatured ? "Yes" : "No", c.description ?? "",
+    String(c.productCount ?? c.product_count ?? ""),
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`));
+  const csv = [headers.map((h) => `"${h}"`).join(","), ...lines.map((l) => l.join(","))].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = `zawadi-collections-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
 
 const OCCASIONS = [
   { value: "client_gifts", label: "Client Gifts" },
@@ -120,9 +133,14 @@ export default function Collections() {
             <h1 className="text-2xl font-serif font-semibold text-foreground">Gift Collections</h1>
             <p className="text-sm text-muted-foreground mt-1">Curated sets for every corporate occasion</p>
           </div>
-          <Button size="sm" onClick={openModal} className="gap-1.5" data-testid="button-new-collection">
-            <Plus size={14} /> New Collection
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => exportCSV((collections as any[]) ?? [])} data-testid="button-export-csv">
+              <Download size={13} /> Export CSV
+            </Button>
+            <Button size="sm" onClick={openModal} className="gap-1.5" data-testid="button-new-collection">
+              <Plus size={14} /> New Collection
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
