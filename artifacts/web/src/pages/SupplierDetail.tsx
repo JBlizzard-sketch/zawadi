@@ -271,8 +271,8 @@ export default function SupplierDetail() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-serif font-semibold text-foreground">Products from {s.name}</h2>
-            <Link href="/catalogue" className="text-xs font-medium text-primary hover:underline flex items-center gap-1">
-              View all <ExternalLink size={11} />
+            <Link href={`/catalogue?supplier=${s.id}`} className="text-xs font-medium text-primary hover:underline flex items-center gap-1">
+              View all in Catalogue <ExternalLink size={11} />
             </Link>
           </div>
 

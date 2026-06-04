@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { ArrowUpRight, TrendingUp, Package, Building2, Layers, ShoppingCart, Clock, AlertTriangle, Leaf, MapPin, FileText, Receipt, Activity, Truck, CalendarClock, Gift, Plus } from "lucide-react";
+import { ArrowUpRight, TrendingUp, Package, Building2, Layers, ShoppingCart, Clock, AlertTriangle, Leaf, MapPin, FileText, Receipt, Activity, Truck, CalendarClock, Gift, Plus, ClipboardList } from "lucide-react";
 import { useGetDashboardStats, getGetDashboardStatsQueryKey, useGetRecentOrders, getGetRecentOrdersQueryKey, useGetTopProducts, getGetTopProductsQueryKey } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -53,6 +53,13 @@ export default function Dashboard() {
     queryFn: () => fetch(`${BASE}/api/dashboard/upcoming-deliveries`).then((r) => r.json()),
     staleTime: 60_000,
   });
+
+  const { data: recentPOs } = useQuery<any>({
+    queryKey: ["dashboard-recent-pos"],
+    queryFn: () => fetch(`${BASE}/api/purchase-orders?limit=5`).then((r) => r.json()),
+    staleTime: 60_000,
+  });
+  const recentPOList: any[] = recentPOs?.items ?? [];
 
   const revenueData = (stats?.revenue_by_month ?? []).map((r: { month: string; revenue: number }) => ({
     month: MONTH_LABELS[r.month?.split("-")[1]] ?? r.month,
@@ -325,6 +332,63 @@ export default function Dashboard() {
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <span className="text-xs text-muted-foreground capitalize">{event.status}</span>
                       {event.amount && <span className="text-sm font-semibold text-foreground tabular-nums">{formatKES(Number(event.amount))}</span>}
+                      <ArrowUpRight size={13} className="text-muted-foreground/40" />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Recent Purchase Orders */}
+        <div className="mb-6 bg-card border border-card-border rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-card-border">
+            <div className="flex items-center gap-2">
+              <ClipboardList size={14} className="text-primary" />
+              <p className="text-sm font-semibold text-foreground">Recent Purchase Orders</p>
+            </div>
+            <Link href="/purchase-orders" className="text-xs text-primary font-medium flex items-center gap-1 hover:underline" data-testid="link-all-pos">
+              View all <ArrowUpRight size={12} />
+            </Link>
+          </div>
+          {recentPOList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10">
+              <ClipboardList size={24} className="text-muted-foreground/30 mb-2" />
+              <p className="text-sm text-muted-foreground">No purchase orders yet</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {recentPOList.map((po: any) => {
+                const statusColors: Record<string, string> = {
+                  draft: "bg-stone-100 text-stone-600 border-stone-200",
+                  sent: "bg-blue-50 text-blue-700 border-blue-200",
+                  acknowledged: "bg-amber-50 text-amber-700 border-amber-200",
+                  fulfilled: "bg-green-50 text-green-700 border-green-200",
+                  cancelled: "bg-red-50 text-red-600 border-red-200",
+                };
+                const statusLabels: Record<string, string> = {
+                  draft: "Draft", sent: "Sent", acknowledged: "Acknowledged", fulfilled: "Fulfilled", cancelled: "Cancelled",
+                };
+                return (
+                  <Link
+                    key={po.id}
+                    href={`/purchase-orders/${po.id}`}
+                    className="flex items-center gap-4 px-5 py-3 hover:bg-muted/40 transition-colors"
+                    data-testid={`po-row-${po.id}`}
+                  >
+                    <div className="w-7 h-7 bg-primary/8 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <ClipboardList size={12} className="text-primary/70" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">{po.poNumber ?? po.reference ?? "PO"}</p>
+                      <p className="text-xs text-muted-foreground truncate">{po.supplierName ?? "—"} · {formatDate(po.createdAt)}</p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${statusColors[po.status] ?? "bg-muted text-muted-foreground border-border"}`}>
+                        {statusLabels[po.status] ?? po.status}
+                      </span>
+                      {po.total != null && <span className="text-sm font-semibold text-foreground tabular-nums">{formatKES(Number(po.total))}</span>}
                       <ArrowUpRight size={13} className="text-muted-foreground/40" />
                     </div>
                   </Link>
