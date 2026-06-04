@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
-import { ArrowLeft, Package, Gift, Plus, X, Check, Pencil, Search, MessageCircle } from "lucide-react";
+import { ArrowLeft, Package, Gift, Plus, X, Check, Pencil, Search, MessageCircle, Printer } from "lucide-react";
 import {
   useGetCollection, getGetCollectionQueryKey,
   useListProducts, getListProductsQueryKey,
@@ -159,7 +159,35 @@ export default function CollectionDetail() {
 
   return (
     <Layout>
-      <div className="p-8 max-w-5xl mx-auto">
+      {/* Printable catalogue — hidden in UI, visible on print */}
+      <div className="hidden print:block font-sans text-[12px] text-gray-900 bg-white p-10" style={{ maxWidth: 760, margin: "0 auto" }}>
+        <div style={{ borderBottom: "2px solid #c2410c", paddingBottom: 12, marginBottom: 20 }}>
+          <p style={{ fontSize: 9, color: "#78716c", textTransform: "uppercase", letterSpacing: 2 }}>Zawadi — Corporate Gifting</p>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: "4px 0" }}>{col.name}</h1>
+          {col.description && <p style={{ fontSize: 11, color: "#57534e", margin: "4px 0" }}>{col.description}</p>}
+          <p style={{ fontSize: 10, color: "#78716c", marginTop: 6 }}>
+            {col.productCount ?? col.products?.length ?? 0} products · From {formatKES(col.minPrice)}
+            {col.maxPrice ? ` — ${formatKES(col.maxPrice)}` : ""}
+          </p>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {(col.products ?? []).map((p: any, idx: number) => (
+            <div key={p.id} style={{ border: "1px solid #e7e5e4", borderRadius: 8, padding: 14 }}>
+              <p style={{ fontSize: 9, color: "#a8a29e", textTransform: "uppercase", letterSpacing: 1 }}>#{idx + 1}</p>
+              <p style={{ fontWeight: 700, fontSize: 13, margin: "2px 0 4px" }}>{p.name}</p>
+              {p.supplier?.name && <p style={{ fontSize: 10, color: "#78716c" }}>By {p.supplier.name}</p>}
+              {p.description && <p style={{ fontSize: 10, color: "#57534e", margin: "6px 0", lineHeight: 1.5 }}>{p.description}</p>}
+              <p style={{ fontSize: 12, fontWeight: 700, color: "#c2410c", marginTop: 8 }}>KES {Number(p.unitPrice).toLocaleString("en-KE")} / unit</p>
+              {p.moq > 1 && <p style={{ fontSize: 9, color: "#a8a29e" }}>Min. order: {p.moq} units</p>}
+            </div>
+          ))}
+        </div>
+        <div style={{ borderTop: "1px solid #e7e5e4", marginTop: 24, paddingTop: 12, fontSize: 9, color: "#a8a29e", textAlign: "center" }}>
+          All prices exclusive of 16% VAT · {new Date().toLocaleDateString("en-KE", { year: "numeric", month: "long", day: "numeric" })}
+        </div>
+      </div>
+
+      <div className="p-8 max-w-5xl mx-auto print:hidden">
         <button onClick={() => setLocation("/collections")} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors" data-testid="button-back">
           <ArrowLeft size={16} /> Back to Collections
         </button>
@@ -182,6 +210,15 @@ export default function CollectionDetail() {
               </Button>
               {(col.products ?? []).length > 0 && (
                 <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 bg-white/70 hover:bg-white"
+                    onClick={() => window.print()}
+                    data-testid="button-print-collection"
+                  >
+                    <Printer size={13} /> Print
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
