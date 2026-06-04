@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, Send, XCircle, Printer, Building2, Copy, Truck, X, MessageCircle, Tag, Check, Pencil } from "lucide-react";
+import { ArrowLeft, ArrowRight, Send, XCircle, Printer, Building2, Copy, Truck, X, MessageCircle, Tag, Check, Pencil, ShoppingCart, Receipt } from "lucide-react";
 import { useGetQuote, getGetQuoteQueryKey, useConvertQuoteToOrder } from "@workspace/api-client-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, QUOTE_STATUS_COLORS } from "@/lib/format";
@@ -229,6 +229,27 @@ export default function QuoteDetail() {
     queryFn: () => fetch(`${BASE}/api/settings`).then(r => r.json()),
   });
 
+  const { data: linkedOrderData } = useQuery<any>({
+    queryKey: ["linked-order", id],
+    queryFn: () => fetch(`${BASE}/api/orders?quote_id=${id}&limit=1`).then(r => r.json()),
+    enabled: !!id && !!q && q.status === "accepted",
+  });
+  const linkedOrder = linkedOrderData?.items?.[0] ?? null;
+
+  const generateInvoice = useMutation({
+    mutationFn: async () => {
+      const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const res = await fetch(`${BASE}/api/invoices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: linkedOrder.id, due_date: dueDate }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "Failed to generate invoice"); }
+      return res.json();
+    },
+    onSuccess: (inv: any) => setLocation(`/invoices/${inv.id}`),
+  });
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetQuoteQueryKey(id) });
 
   const markSent = useMutation({ mutationFn: () => updateQuoteStatus(id, "sent"), onSuccess: invalidate });
@@ -384,6 +405,19 @@ export default function QuoteDetail() {
                 <Button size="sm" variant="outline" onClick={() => markAccepted.mutate()} disabled={busy} className="gap-1.5 border-green-600/40 text-green-700 hover:bg-green-50" data-testid="button-mark-accepted">
                   <ArrowRight size={13} />
                   {markAccepted.isPending ? "Accepting…" : "Mark Accepted"}
+                </Button>
+              )}
+
+              {q.status === "accepted" && linkedOrder && (
+                <Button size="sm" variant="outline" onClick={() => setLocation(`/orders/${linkedOrder.id}`)} className="gap-1.5 border-primary/30 text-primary hover:bg-primary/5" data-testid="button-view-linked-order">
+                  <ShoppingCart size={13} /> View Order
+                </Button>
+              )}
+
+              {q.status === "accepted" && linkedOrder && (
+                <Button size="sm" variant="outline" onClick={() => generateInvoice.mutate()} disabled={generateInvoice.isPending} className="gap-1.5 border-emerald-600/40 text-emerald-700 hover:bg-emerald-50" data-testid="button-generate-invoice-from-quote">
+                  <Receipt size={13} />
+                  {generateInvoice.isPending ? "Generating…" : "Generate Invoice"}
                 </Button>
               )}
 

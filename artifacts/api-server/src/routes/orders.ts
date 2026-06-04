@@ -15,10 +15,11 @@ const router = Router();
 
 router.get("/orders", async (req, res) => {
   try {
-    const { corporate_id, status, search, limit = "20", offset = "0" } = req.query as Record<string, string>;
+    const { corporate_id, status, search, quote_id, limit = "20", offset = "0" } = req.query as Record<string, string>;
     const conditions = [];
     if (corporate_id) conditions.push(eq(ordersTable.corporateId, corporate_id));
     if (status) conditions.push(eq(ordersTable.status, status as any));
+    if (quote_id) conditions.push(eq(ordersTable.quoteId, quote_id));
     if (search) {
       const corpMatches = await db
         .select({ id: corporatesTable.id })
