@@ -1,14 +1,20 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { categoriesTable, insertCategorySchema } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { categoriesTable, productsTable, insertCategorySchema } from "@workspace/db/schema";
+import { eq, sql } from "drizzle-orm";
 
 const router = Router();
 
 router.get("/categories", async (req, res) => {
   try {
     const categories = await db.select().from(categoriesTable).orderBy(categoriesTable.name);
-    res.json(categories);
+    const counts = await db
+      .select({ categoryId: productsTable.categoryId, count: sql<number>`count(*)` })
+      .from(productsTable)
+      .groupBy(productsTable.categoryId);
+    const countMap = Object.fromEntries(counts.map((r) => [r.categoryId, Number(r.count)]));
+    const enriched = categories.map((c) => ({ ...c, product_count: countMap[c.id] ?? 0 }));
+    res.json(enriched);
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch categories" });

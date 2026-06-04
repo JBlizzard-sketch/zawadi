@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Tag, Plus, Pencil, Trash2, X, Check } from "lucide-react";
+import { useLocation } from "wouter";
+import { Tag, Plus, Pencil, Trash2, X, Check, Package } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ function slugify(s: string) {
 }
 
 export default function Categories() {
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const QUERY_KEY = ["categories-manage"];
 
@@ -208,7 +210,19 @@ export default function Categories() {
                         </div>
                         <span className="text-xs text-muted-foreground/60 font-mono hidden sm:block">{cat.slug}</span>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {cat.product_count > 0 ? (
+                          <button
+                            onClick={() => setLocation(`/catalogue?category=${cat.id}`)}
+                            className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary bg-primary/6 hover:bg-primary/10 border border-primary/15 rounded-full px-2.5 py-0.5 transition-colors"
+                            data-testid={`link-catalogue-${cat.id}`}
+                          >
+                            <Package size={11} />
+                            {cat.product_count} product{cat.product_count !== 1 ? "s" : ""}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground/40 px-2">0 products</span>
+                        )}
                         {confirmDelete === cat.id ? (
                           <>
                             <span className="text-xs text-red-600 mr-1">{deleteError || "Delete?"}</span>
