@@ -62,8 +62,42 @@ function PrintableInvoice({ inv, settings }: { inv: any; settings: any }) {
   const lineItems: any[] = inv.line_items ?? [];
   const hasLines = lineItems.length > 0;
 
+  const isPaid = inv.status === "paid";
+  const isOverdue = inv.status === "overdue" || (inv.status !== "paid" && inv.dueDate && new Date(inv.dueDate) < new Date());
+
   return (
-    <div id="print-invoice" className="hidden print:block font-sans text-[12px] text-gray-900 bg-white" style={{ maxWidth: 740, margin: "0 auto", padding: 40 }}>
+    <div id="print-invoice" className="hidden print:block font-sans text-[12px] text-gray-900 bg-white" style={{ maxWidth: 740, margin: "0 auto", padding: 40, position: "relative" }}>
+
+      {/* Status watermark stamp */}
+      {(isPaid || isOverdue) && (
+        <div style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%) rotate(-30deg)",
+          pointerEvents: "none",
+          zIndex: 10,
+          textAlign: "center",
+          userSelect: "none",
+        }}>
+          <span style={{
+            display: "inline-block",
+            fontSize: 88,
+            fontWeight: 900,
+            letterSpacing: 8,
+            textTransform: "uppercase",
+            opacity: 0.07,
+            color: isPaid ? "#166534" : "#991b1b",
+            border: `10px solid ${isPaid ? "#166534" : "#991b1b"}`,
+            borderRadius: 8,
+            padding: "4px 24px",
+            lineHeight: 1,
+            fontFamily: "Arial Black, sans-serif",
+          }}>
+            {isPaid ? "PAID" : "OVERDUE"}
+          </span>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #1a1a1a", paddingBottom: 20, marginBottom: 24 }}>
