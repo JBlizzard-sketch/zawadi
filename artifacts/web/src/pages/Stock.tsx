@@ -71,6 +71,7 @@ export default function Stock() {
   const totalTracked = allProducts.filter(p => p.stockQty !== null).length;
   const outCount = allProducts.filter(p => p.stockQty === 0).length;
   const lowCount = allProducts.filter(p => p.stockQty !== null && p.stockQty > 0 && p.stockQty < (p.moq ?? 1)).length;
+  const inventoryValue = allProducts.reduce((sum, p) => sum + (Number(p.stockQty ?? 0) * Number(p.unitPrice ?? 0)), 0);
 
   const handleApply = async (id: string) => {
     const raw = adjustments[id] ?? "";
@@ -139,7 +140,7 @@ export default function Stock() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {[
             { label: "Tracked Products", value: isLoading ? "—" : String(totalTracked), onClick: () => setFilter("all"), active: filter === "all" },
             { label: "Out of Stock", value: isLoading ? "—" : String(outCount), onClick: () => setFilter(filter === "out" ? "all" : "out"), active: filter === "out", danger: outCount > 0 },
@@ -157,6 +158,11 @@ export default function Stock() {
               <p className={`text-2xl font-semibold tabular-nums ${danger ? "text-red-600" : warn ? "text-amber-600" : "text-foreground"}`}>{value}</p>
             </button>
           ))}
+          <div className="bg-card border border-card-border rounded-xl p-4 shadow-sm text-left" data-testid="stat-inventory-value">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Inventory Value</p>
+            <p className="text-xl font-semibold tabular-nums text-foreground">{isLoading ? "—" : `KES ${inventoryValue.toLocaleString("en-KE")}`}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">stock qty × unit price</p>
+          </div>
         </div>
 
         {/* Mode toggle */}
