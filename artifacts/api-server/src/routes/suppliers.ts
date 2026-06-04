@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { suppliersTable, insertSupplierSchema } from "@workspace/db/schema";
-import { eq, and, ilike, sql } from "drizzle-orm";
+import { suppliersTable, productsTable, insertSupplierSchema } from "@workspace/db/schema";
+import { eq, and, ilike, sql, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -41,7 +41,18 @@ router.get("/suppliers", async (req, res) => {
       db.select().from(suppliersTable).where(where).orderBy(suppliersTable.name).limit(limit).offset(offset),
     ]);
 
-    res.json({ items, total: Number(countResult[0]?.count ?? 0) });
+    const supplierIds = items.map((s) => s.id);
+    const productCounts = supplierIds.length
+      ? await db
+          .select({ supplierId: productsTable.supplierId, count: sql<number>`count(*)` })
+          .from(productsTable)
+          .where(inArray(productsTable.supplierId, supplierIds))
+          .groupBy(productsTable.supplierId)
+      : [];
+    const countMap = Object.fromEntries(productCounts.map((r) => [r.supplierId, Number(r.count)]));
+    const enriched = items.map((s) => ({ ...s, product_count: countMap[s.id] ?? 0 }));
+
+    res.json({ items: enriched, total: Number(countResult[0]?.count ?? 0) });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch suppliers" });

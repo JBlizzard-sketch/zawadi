@@ -35,9 +35,9 @@ export default function Catalogue() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("search") ?? "");
-  const [categoryId, setCategoryId] = useState("");
-  const [supplierId, setSupplierId] = useState("");
-  const [occasion, setOccasion] = useState("");
+  const [categoryId, setCategoryId] = useState(() => new URLSearchParams(window.location.search).get("category") ?? "");
+  const [supplierId, setSupplierId] = useState(() => new URLSearchParams(window.location.search).get("supplier") ?? "");
+  const [occasion, setOccasion] = useState(() => new URLSearchParams(window.location.search).get("occasion") ?? "");
   const [lowStock, setLowStock] = useState(() => new URLSearchParams(window.location.search).get("low_stock") === "true");
   const [showInactive, setShowInactive] = useState(false);
   const [offset, setOffset] = useState(0);

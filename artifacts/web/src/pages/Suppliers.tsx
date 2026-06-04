@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Layers, Search, CheckCircle2, MapPin, Plus, X, Clock, Eye, CheckCheck, XCircle } from "lucide-react";
+import { Layers, Search, CheckCircle2, MapPin, Plus, X, Clock, Eye, CheckCheck, XCircle, Package } from "lucide-react";
 import { useListSuppliers, getListSuppliersQueryKey } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -217,13 +217,21 @@ export default function Suppliers() {
                     {supplier.description && (
                       <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{supplier.description}</p>
                     )}
-                    {supplier.tags?.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-3">
-                        {supplier.tags.slice(0, 3).map((tag: string) => (
-                          <Badge key={tag} variant="outline" className="text-[10px] py-0">{tag}</Badge>
-                        ))}
-                      </div>
-                    )}
+                    <div className="flex items-center justify-between mt-3">
+                      {supplier.tags?.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {supplier.tags.slice(0, 2).map((tag: string) => (
+                            <Badge key={tag} variant="outline" className="text-[10px] py-0">{tag}</Badge>
+                          ))}
+                        </div>
+                      )}
+                      {supplier.product_count > 0 && (
+                        <span className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground/70 bg-muted/50 rounded-full px-2 py-0.5 flex-shrink-0">
+                          <Package size={10} />
+                          {supplier.product_count} product{supplier.product_count !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
                   </div>
               </Link>
             ))}
