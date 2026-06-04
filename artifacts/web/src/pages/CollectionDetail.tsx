@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
-import { ArrowLeft, Package, Gift, Plus, X, Check, Pencil, Search } from "lucide-react";
+import { ArrowLeft, Package, Gift, Plus, X, Check, Pencil, Search, MessageCircle } from "lucide-react";
 import {
   useGetCollection, getGetCollectionQueryKey,
   useListProducts, getListProductsQueryKey,
@@ -181,18 +181,43 @@ export default function CollectionDetail() {
                 <Pencil size={13} /> Edit
               </Button>
               {(col.products ?? []).length > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 bg-white/70 hover:bg-white"
-                  onClick={() => {
-                    const ids = (col.products as any[]).map((p: any) => p.id).join(",");
-                    setLocation(`/hamper-builder?products=${ids}&name=${encodeURIComponent(col.name)}`);
-                  }}
-                  data-testid="button-build-hamper"
-                >
-                  <Gift size={13} /> Build Hamper
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 bg-white/70 hover:bg-white text-green-700 border-green-200 hover:bg-green-50"
+                    onClick={() => {
+                      const lines: string[] = [];
+                      lines.push(`*${col.name}*`);
+                      if (col.description) lines.push(col.description);
+                      lines.push(`${col.productCount ?? col.products?.length ?? 0} curated products`);
+                      if (col.minPrice) lines.push(`From KES ${Number(col.minPrice).toLocaleString("en-KE")}`);
+                      lines.push("");
+                      (col.products as any[]).slice(0, 5).forEach((p: any) => {
+                        lines.push(`• ${p.name}${p.unitPrice ? ` — KES ${Number(p.unitPrice).toLocaleString("en-KE")}` : ""}`);
+                      });
+                      if ((col.products?.length ?? 0) > 5) lines.push(`  …and ${col.products.length - 5} more`);
+                      lines.push("");
+                      lines.push("Reply to discuss a custom corporate gifting order.");
+                      window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+                    }}
+                    data-testid="button-whatsapp-share"
+                  >
+                    <MessageCircle size={13} /> Share
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 bg-white/70 hover:bg-white"
+                    onClick={() => {
+                      const ids = (col.products as any[]).map((p: any) => p.id).join(",");
+                      setLocation(`/hamper-builder?products=${ids}&name=${encodeURIComponent(col.name)}`);
+                    }}
+                    data-testid="button-build-hamper"
+                  >
+                    <Gift size={13} /> Build Hamper
+                  </Button>
+                </>
               )}
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Clock, MapPin, Tag, ShoppingCart, Gift, Star, Leaf, Pencil, X, Plus, Trash2, ImagePlus, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Package, Clock, MapPin, Tag, ShoppingCart, Gift, Star, Leaf, Pencil, X, Plus, Trash2, ImagePlus, CheckCircle2, MessageCircle } from "lucide-react";
 import { useGetProduct, getGetProductQueryKey, useListCategories, getListCategoriesQueryKey, useListSuppliers, getListSuppliersQueryKey } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES } from "@/lib/format";
@@ -462,6 +462,31 @@ export default function ProductDetail() {
                 data-testid="button-request-quote"
               >
                 <ShoppingCart size={15} /> Request a Quote
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full gap-2 text-sm text-green-700 border-green-200 hover:bg-green-50"
+                onClick={() => {
+                  const lines: string[] = [];
+                  lines.push(`*${p.name}*`);
+                  if (p.supplier?.name) lines.push(`By ${p.supplier.name}`);
+                  lines.push(`KES ${Number(p.unitPrice).toLocaleString("en-KE")} per unit`);
+                  if (p.description) lines.push(""); lines.push(p.description ?? "");
+                  if (p.bulkTiers?.length) {
+                    lines.push("");
+                    lines.push("*Bulk Pricing:*");
+                    p.bulkTiers.forEach((t: any) => {
+                      lines.push(`• ${t.minQty}+ units @ KES ${Number(t.pricePerUnit).toLocaleString("en-KE")}/unit`);
+                    });
+                  }
+                  lines.push("");
+                  lines.push("Reply to place a corporate order or request a quote.");
+                  window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+                }}
+                data-testid="button-whatsapp-share"
+              >
+                <MessageCircle size={15} /> Share via WhatsApp
               </Button>
             </div>
 
