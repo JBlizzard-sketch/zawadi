@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Receipt, ChevronRight, Download } from "lucide-react";
-import { useListInvoices, getListInvoicesQueryKey } from "@workspace/api-client-react";
+import { Receipt, ChevronRight, Download, Search, X } from "lucide-react";
+import { useListInvoices, getListInvoicesQueryKey, useListCorporates, getListCorporatesQueryKey } from "@workspace/api-client-react";
 import { formatKES, formatDate, INVOICE_STATUS_COLORS } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,23 +31,78 @@ function exportCSV(rows: any[]) {
   a.click(); URL.revokeObjectURL(url);
 }
 
+const LIMIT = 20;
+
 export default function Invoices() {
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState(() => new URLSearchParams(window.location.search).get("status") ?? "");
+  const [search, setSearch] = useState("");
+  const [corporateId, setCorporateId] = useState("");
+  const [offset, setOffset] = useState(0);
 
-  const params = { status: status || undefined };
-  const { data: invoices, isLoading } = useListInvoices(params, { query: { queryKey: getListInvoicesQueryKey(params) } });
-  const invoiceList = (invoices as any[]) ?? [];
+  const params = { status: status || undefined, search: search || undefined, corporate_id: corporateId || undefined, limit: LIMIT, offset };
+  const { data: invoicesData, isLoading } = useListInvoices(params as any, { query: { queryKey: getListInvoicesQueryKey(params as any) } });
+
+  const { data: corporates } = useListCorporates(undefined, { query: { queryKey: getListCorporatesQueryKey() } });
+  const corporateList = (corporates as any[]) ?? [];
+
+  const invoiceList = (invoicesData as any)?.items ?? [];
+  const total: number = (invoicesData as any)?.total ?? 0;
+  const totalPages = Math.ceil(total / LIMIT);
+  const currentPage = Math.floor(offset / LIMIT) + 1;
+
+  const handleSearch = (v: string) => { setSearch(v); setOffset(0); };
+  const handleStatus = (v: string) => { setStatus(v === "all" ? "" : v); setOffset(0); };
 
   return (
     <Layout>
       <div className="p-8 max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-serif font-semibold text-foreground">Invoices</h1>
-            <p className="text-sm text-muted-foreground mt-1">KRA-compliant VAT invoices</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {isLoading ? "Loading…" : `${total} invoice${total !== 1 ? "s" : ""}`}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-2.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Invoice no. or client…"
+                className="h-9 pl-8 pr-8 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 w-52"
+                data-testid="input-search"
+              />
+              {search && (
+                <button onClick={() => handleSearch("")} className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground">
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            <Select value={corporateId} onValueChange={(v) => { setCorporateId(v === "all" ? "" : v); setOffset(0); }}>
+              <SelectTrigger className="w-44 h-9 text-sm" data-testid="select-corporate-filter">
+                <SelectValue placeholder="All clients" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All clients</SelectItem>
+                {corporateList.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={status} onValueChange={handleStatus}>
+              <SelectTrigger className="w-40 h-9 text-sm" data-testid="select-invoice-status">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {INVOICE_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>{INVOICE_STATUS_LABELS[s]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <button
               onClick={() => exportCSV(invoiceList)}
               disabled={invoiceList.length === 0}
@@ -56,17 +111,6 @@ export default function Invoices() {
             >
               <Download size={13} /> Export CSV
             </button>
-          <Select value={status} onValueChange={(v) => setStatus(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-40 h-9 text-sm" data-testid="select-invoice-status">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {INVOICE_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>{INVOICE_STATUS_LABELS[s]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           </div>
         </div>
 
@@ -75,6 +119,7 @@ export default function Invoices() {
             <thead className="bg-muted/40 border-b border-border">
               <tr>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Invoice No.</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Client</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Issued</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Due Date</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
@@ -84,9 +129,10 @@ export default function Invoices() {
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
+                Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
                     <td className="px-5 py-3"><Skeleton className="h-4 w-32" /></td>
+                    <td className="px-5 py-3 hidden lg:table-cell"><Skeleton className="h-4 w-36" /></td>
                     <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-24" /></td>
                     <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-24" /></td>
                     <td className="px-5 py-3"><Skeleton className="h-5 w-20" /></td>
@@ -96,9 +142,14 @@ export default function Invoices() {
                 ))
               ) : invoiceList.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-16 text-center">
+                  <td colSpan={7} className="px-5 py-16 text-center">
                     <Receipt size={32} className="mx-auto text-muted-foreground/30 mb-3" />
-                    <p className="text-sm text-muted-foreground">No invoices found</p>
+                    <p className="text-sm text-muted-foreground">
+                      {search ? `No invoices matching "${search}"` : "No invoices found"}
+                    </p>
+                    {search && (
+                      <button onClick={() => handleSearch("")} className="mt-2 text-xs text-primary hover:underline">Clear search</button>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -111,8 +162,9 @@ export default function Invoices() {
                   >
                     <td className="px-5 py-3">
                       <p className="font-semibold text-foreground font-mono text-sm">{inv.invoiceNumber}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{inv.corporate_name ?? (inv.kraPin ? `KRA: ${inv.kraPin}` : "—")}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 lg:hidden">{inv.corporate_name ?? "—"}</p>
                     </td>
+                    <td className="px-5 py-3 text-sm text-foreground hidden lg:table-cell">{inv.corporate_name ?? "—"}</td>
                     <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(inv.createdAt)}</td>
                     <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(inv.dueDate)}</td>
                     <td className="px-5 py-3">
@@ -126,6 +178,26 @@ export default function Invoices() {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-5">
+            <button
+              disabled={offset === 0}
+              onClick={() => setOffset(Math.max(0, offset - LIMIT))}
+              className="px-4 py-2 text-sm rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+            <button
+              disabled={currentPage >= totalPages}
+              onClick={() => setOffset(offset + LIMIT)}
+              className="px-4 py-2 text-sm rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </Layout>
   );

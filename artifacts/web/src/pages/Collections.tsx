@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { BookOpen, ArrowRight, Plus, X } from "lucide-react";
+import { BookOpen, ArrowRight, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { useListCollections, getListCollectionsQueryKey } from "@workspace/api-client-react";
 import { formatKES } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,20 +54,32 @@ export default function Collections() {
   const { data: collections, isLoading } = useListCollections({}, { query: { queryKey: getListCollectionsQueryKey({}) } });
 
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [form, setForm] = useState({ ...EMPTY });
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
-  const openModal = () => { setForm({ ...EMPTY }); setError(""); setShowModal(true); };
-  const closeModal = () => setShowModal(false);
+  const openModal = () => { setForm({ ...EMPTY }); setEditingId(null); setError(""); setShowModal(true); };
+  const openEdit = (col: any, e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    setForm({ name: col.name, occasion: col.occasion, description: col.description ?? "", coverImageUrl: col.coverImageUrl ?? "", isFeatured: col.isFeatured ?? false });
+    setEditingId(col.id);
+    setError("");
+    setShowModal(true);
+  };
+  const closeModal = () => { setShowModal(false); setEditingId(null); };
 
   const handleSubmit = async () => {
     if (!form.name.trim() || !form.occasion) return;
     setSubmitting(true);
     setError("");
     try {
-      const res = await fetch(`${BASE}/api/collections`, {
-        method: "POST",
+      const url = editingId ? `${BASE}/api/collections/${editingId}` : `${BASE}/api/collections`;
+      const method = editingId ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name.trim(),
@@ -83,9 +95,20 @@ export default function Collections() {
       await queryClient.invalidateQueries({ queryKey: getListCollectionsQueryKey({}) });
       closeModal();
     } catch (e: any) {
-      setError(e.message ?? "Failed to create collection");
+      setError(e.message ?? "Failed to save collection");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleting(true);
+    try {
+      await fetch(`${BASE}/api/collections/${id}`, { method: "DELETE" });
+      await queryClient.invalidateQueries({ queryKey: getListCollectionsQueryKey({}) });
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(null);
     }
   };
 
@@ -127,15 +150,32 @@ export default function Collections() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {(collections as any[])?.map((col: any, i: number) => (
-              <Link key={col.id} href={`/collections/${col.id}`} className="group block bg-card border border-card-border rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5" data-testid={`card-collection-${col.id}`}>
+              <div key={col.id} className="relative group bg-card border border-card-border rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5" data-testid={`card-collection-${col.id}`}>
+                {/* Action buttons — appear on hover */}
+                <div className="absolute top-2 left-2 z-10 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => openEdit(col, e)}
+                    className="p-1.5 bg-white/90 hover:bg-white rounded-md shadow text-stone-600 hover:text-primary transition-colors"
+                    data-testid={`button-edit-collection-${col.id}`}
+                    title="Edit collection"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(col.id); }}
+                    className="p-1.5 bg-white/90 hover:bg-white rounded-md shadow text-stone-600 hover:text-red-600 transition-colors"
+                    data-testid={`button-delete-collection-${col.id}`}
+                    title="Delete collection"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+
+                <Link href={`/collections/${col.id}`} className="block">
                   {/* Cover */}
                   <div className={`h-44 relative overflow-hidden ${col.coverImageUrl ? "" : `bg-gradient-to-br ${BG_GRADIENTS[i % BG_GRADIENTS.length]}`}`}>
                     {col.coverImageUrl ? (
-                      <img
-                        src={col.coverImageUrl}
-                        alt={col.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
+                      <img src={col.coverImageUrl} alt={col.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     ) : (
                       <div className="flex items-center justify-center h-full">
                         <BookOpen size={36} className="text-muted-foreground/20" />
@@ -169,18 +209,35 @@ export default function Collections() {
                       <ArrowRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
                   </div>
-              </Link>
+                </Link>
+              </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* New Collection Modal */}
+      {/* Delete Confirm Dialog */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-card border border-card-border rounded-xl shadow-xl w-full max-w-sm p-6">
+            <h2 className="text-base font-serif font-semibold text-foreground mb-2">Delete Collection?</h2>
+            <p className="text-sm text-muted-foreground mb-5">This will permanently remove the collection and all its product assignments. This cannot be undone.</p>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setConfirmDelete(null)} disabled={deleting}>Cancel</Button>
+              <Button size="sm" onClick={() => handleDelete(confirmDelete)} disabled={deleting} className="bg-red-600 hover:bg-red-700 text-white border-red-600">
+                {deleting ? "Deleting…" : "Delete"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New / Edit Collection Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
           <div className="bg-card border border-card-border rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between rounded-t-xl">
-              <h2 className="text-base font-serif font-semibold text-foreground">New Gift Collection</h2>
+              <h2 className="text-base font-serif font-semibold text-foreground">{editingId ? "Edit Collection" : "New Gift Collection"}</h2>
               <button onClick={closeModal} className="text-muted-foreground hover:text-foreground transition-colors"><X size={18} /></button>
             </div>
 
@@ -256,7 +313,7 @@ export default function Collections() {
                 disabled={submitting || !form.name.trim()}
                 data-testid="button-confirm-collection"
               >
-                {submitting ? "Creating…" : "Create Collection"}
+                {submitting ? (editingId ? "Saving…" : "Creating…") : (editingId ? "Save Changes" : "Create Collection")}
               </Button>
             </div>
           </div>

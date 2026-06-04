@@ -20,9 +20,23 @@ interface HamperItem {
   productId: string;
   name: string;
   unitPrice: number;
+  bulkTiers: Array<{ min_qty: number; price_per_unit: number }>;
   quantity: number;
   origin: string;
   brandedPackaging: boolean;
+}
+
+function getEffectivePrice(
+  basePrice: number,
+  tiers: Array<{ min_qty: number; price_per_unit: number }>,
+  qty: number
+): number {
+  if (!tiers?.length) return basePrice;
+  const sorted = [...tiers].sort((a, b) => b.min_qty - a.min_qty);
+  for (const tier of sorted) {
+    if (qty >= tier.min_qty) return tier.price_per_unit;
+  }
+  return basePrice;
 }
 
 const VAT_RATE = 0.16;
@@ -43,6 +57,7 @@ export default function HamperBuilder() {
   const [showModal, setShowModal] = useState(false);
   const [corporateId, setCorporateId] = useState("");
   const [notes, setNotes] = useState("");
+  const [validUntil, setValidUntil] = useState(() => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
@@ -73,6 +88,7 @@ export default function HamperBuilder() {
             productId: item.productId,
             name: item.product?.name ?? "Unknown Product",
             unitPrice: parseFloat(item.unitPrice ?? item.product?.unitPrice ?? "0"),
+            bulkTiers: item.product?.bulkTiers ?? [],
             quantity: item.quantity ?? 1,
             origin: item.product?.origin ?? "",
             brandedPackaging: false,
@@ -152,6 +168,7 @@ export default function HamperBuilder() {
         productId: p.id,
         name: p.name,
         unitPrice: parseFloat(p.unitPrice),
+        bulkTiers: p.bulkTiers ?? [],
         quantity: 1,
         origin: p.origin,
         brandedPackaging: false,
@@ -168,7 +185,7 @@ export default function HamperBuilder() {
       if (existing) {
         return prev.map((i) => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return [...prev, { productId: product.id, name: product.name, unitPrice: parseFloat(product.unitPrice), quantity: 1, origin: product.origin, brandedPackaging: false }];
+      return [...prev, { productId: product.id, name: product.name, unitPrice: parseFloat(product.unitPrice), bulkTiers: product.bulkTiers ?? [], quantity: 1, origin: product.origin, brandedPackaging: false }];
     });
   };
 
@@ -189,18 +206,24 @@ export default function HamperBuilder() {
   };
 
   const totals = useMemo(() => {
-    const hamperValue = hamper.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+    const itemsWithEffective = hamper.map(i => {
+      const totalQty = i.quantity * recipients;
+      const effectivePrice = getEffectivePrice(i.unitPrice, i.bulkTiers, totalQty);
+      return { ...i, effectivePrice };
+    });
+    const hamperValue = itemsWithEffective.reduce((sum, i) => sum + i.effectivePrice * i.quantity, 0);
     const totalUnits = recipients * hamper.reduce((sum, i) => sum + i.quantity, 0);
     const subtotal = hamperValue * recipients;
     const vat = subtotal * VAT_RATE;
     const total = subtotal + vat;
-    return { hamperValue, totalUnits, subtotal, vat, total };
+    return { hamperValue, totalUnits, subtotal, vat, total, itemsWithEffective };
   }, [hamper, recipients]);
 
   const handleRequestQuote = () => {
     setSubmitError("");
     setCorporateId("");
     setNotes(`${hamperName} — ${recipients} recipient${recipients !== 1 ? "s" : ""}`);
+    setValidUntil(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
     setShowModal(true);
   };
 
@@ -224,7 +247,7 @@ export default function HamperBuilder() {
     }
 
     createQuote.mutate(
-      { data: { corporate_id: corporateId, items: consolidatedItems, notes } as any },
+      { data: { corporate_id: corporateId, items: consolidatedItems, notes, valid_until: validUntil } as any },
       {
         onSuccess: (quote: any) => {
           setSubmitting(false);
@@ -402,12 +425,28 @@ export default function HamperBuilder() {
                 </div>
               ) : (
                 <div className="divide-y divide-border">
-                  {hamper.map((item) => (
+                  {totals.itemsWithEffective.map((item) => {
+                    const hasDiscount = item.effectivePrice < item.unitPrice;
+                    return (
                     <div key={item.productId} className="px-4 py-3" data-testid={`hamper-item-${item.productId}`}>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-foreground line-clamp-1">{item.name}</p>
-                          <p className="text-xs text-muted-foreground">{formatKES(item.unitPrice)} each</p>
+                          <p className="text-xs text-muted-foreground">
+                            {hasDiscount ? (
+                              <>
+                                <span className="line-through opacity-50">{formatKES(item.unitPrice)}</span>
+                                {" "}<span className="text-green-700 font-semibold">{formatKES(item.effectivePrice)}</span> each
+                              </>
+                            ) : (
+                              <>{formatKES(item.effectivePrice)} each</>
+                            )}
+                          </p>
+                          {hasDiscount && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded px-1.5 py-0.5 mt-0.5">
+                              Volume discount · {item.quantity * recipients}+ units
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1">
                           <button onClick={() => updateQuantity(item.productId, -1)} className="w-6 h-6 rounded border border-border flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors" data-testid={`button-decrease-${item.productId}`}>
@@ -418,7 +457,7 @@ export default function HamperBuilder() {
                             <Plus size={10} />
                           </button>
                         </div>
-                        <span className="text-xs font-semibold text-foreground w-16 text-right tabular-nums">{formatKES(item.unitPrice * item.quantity)}</span>
+                        <span className={`text-xs font-semibold w-16 text-right tabular-nums ${hasDiscount ? "text-green-700" : "text-foreground"}`}>{formatKES(item.effectivePrice * item.quantity)}</span>
                         <button onClick={() => removeItem(item.productId)} className="text-muted-foreground hover:text-destructive transition-colors" data-testid={`button-remove-${item.productId}`}>
                           <Trash2 size={13} />
                         </button>
@@ -434,7 +473,8 @@ export default function HamperBuilder() {
                         <span className="text-[11px] text-muted-foreground">Branded packaging</span>
                       </label>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               )}
             </div>
@@ -507,7 +547,18 @@ export default function HamperBuilder() {
                 </div>
               </div>
 
-              {/* Notes */}
+              {/* Valid Until + Notes */}
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Valid Until</label>
+                <input
+                  type="date"
+                  value={validUntil}
+                  onChange={(e) => setValidUntil(e.target.value)}
+                  min={new Date().toISOString().slice(0, 10)}
+                  className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  data-testid="input-valid-until"
+                />
+              </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Notes (optional)</label>
                 <Textarea

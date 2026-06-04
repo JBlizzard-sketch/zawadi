@@ -1,6 +1,7 @@
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useGetDashboardStats, getGetDashboardStatsQueryKey, useGetTopProducts, getGetTopProductsQueryKey } from "@workspace/api-client-react";
-import { BarChart3, TrendingUp, Users, Package, Receipt, Leaf, MapPin, Award } from "lucide-react";
+import { BarChart3, TrendingUp, Users, Package, Receipt, Leaf, MapPin, Award, Calendar, Download, ShieldCheck } from "lucide-react";
 import { formatKES, TIER_COLORS } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -53,32 +54,72 @@ function StatCard({ label, value, sub, icon: Icon, loading }: { label: string; v
   );
 }
 
+type Period = "all" | "this_month" | "last_3_months" | "this_year";
+
+const PERIOD_LABELS: Record<Period, string> = {
+  all: "All Time",
+  this_month: "This Month",
+  last_3_months: "Last 3 Months",
+  this_year: "This Year",
+};
+
+function getPeriodDates(period: Period): { from?: string; to?: string } {
+  if (period === "all") return {};
+  const now = new Date();
+  const to = now.toISOString();
+  if (period === "this_month") {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    return { from, to };
+  }
+  if (period === "last_3_months") {
+    const from = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString();
+    return { from, to };
+  }
+  if (period === "this_year") {
+    const from = new Date(now.getFullYear(), 0, 1).toISOString();
+    return { from, to };
+  }
+  return {};
+}
+
+function buildParams(extra: Record<string, string | undefined>): string {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(extra)) {
+    if (v !== undefined) p.set(k, v);
+  }
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
 export default function Reports() {
+  const [period, setPeriod] = useState<Period>("all");
+  const dates = useMemo(() => getPeriodDates(period), [period]);
+
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats({ query: { queryKey: getGetDashboardStatsQueryKey() } });
   const { data: topProducts, isLoading: productsLoading } = useGetTopProducts(undefined, { query: { queryKey: getGetTopProductsQueryKey() } });
 
   const { data: topClients, isLoading: clientsLoading } = useQuery({
-    queryKey: ["reports", "top-clients"],
+    queryKey: ["reports", "top-clients", period],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/reports/top-clients?limit=8`);
+      const res = await fetch(`${BASE}/api/reports/top-clients${buildParams({ limit: "8", from: dates.from, to: dates.to })}`);
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
   });
 
   const { data: invoiceSummary, isLoading: invoiceLoading } = useQuery({
-    queryKey: ["reports", "invoice-summary"],
+    queryKey: ["reports", "invoice-summary", period],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/reports/invoice-summary`);
+      const res = await fetch(`${BASE}/api/reports/invoice-summary${buildParams({ from: dates.from, to: dates.to })}`);
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
   });
 
   const { data: quoteFunnel, isLoading: funnelLoading } = useQuery({
-    queryKey: ["reports", "quote-funnel"],
+    queryKey: ["reports", "quote-funnel", period],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/reports/quote-funnel`);
+      const res = await fetch(`${BASE}/api/reports/quote-funnel${buildParams({ from: dates.from, to: dates.to })}`);
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -93,10 +134,58 @@ export default function Reports() {
     },
   });
 
+  const { data: invoiceAging, isLoading: agingLoading } = useQuery({
+    queryKey: ["reports", "invoice-aging"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/reports/invoice-aging`);
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
+  const { data: topSuppliers, isLoading: suppliersLoading } = useQuery({
+    queryKey: ["reports", "top-suppliers"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/reports/top-suppliers?limit=8`);
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
   const s = stats as any;
   const products = (topProducts as any[]) ?? [];
   const clients = (topClients as any[]) ?? [];
   const invSummary = (invoiceSummary as any[]) ?? [];
+
+  const suppliers = (topSuppliers as any[]) ?? [];
+
+  function exportReportsCSV() {
+    const lines: string[] = [];
+    lines.push("TOP CLIENTS BY SPEND");
+    lines.push(["Rank", "Company", "Tier", "Orders", "Total Spend (KES)"].join(","));
+    clients.forEach((c: any, i: number) => {
+      lines.push([i + 1, `"${c.corporate_name}"`, c.tier ?? "", c.total_orders, Number(c.total_spend).toFixed(2)].join(","));
+    });
+    lines.push("");
+    lines.push("TOP SUPPLIERS BY REVENUE");
+    lines.push(["Rank", "Supplier", "County", "Orders", "Units Sold", "Total Revenue (KES)"].join(","));
+    suppliers.forEach((s: any, i: number) => {
+      lines.push([i + 1, `"${s.supplier_name}"`, s.county ?? "", s.total_orders, s.total_units, Number(s.total_revenue).toFixed(2)].join(","));
+    });
+    lines.push("");
+    lines.push("TOP PRODUCTS BY REVENUE");
+    lines.push(["Rank", "Product", "Units Sold", "Total Revenue (KES)"].join(","));
+    products.forEach((p: any, i: number) => {
+      lines.push([i + 1, `"${p.product_name}"`, p.total_units, Number(p.total_revenue).toFixed(2)].join(","));
+    });
+    const csv = lines.join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `zawadi-reports-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   const revenueData = (s?.revenue_by_month ?? []).map((r: { month: string; revenue: number }) => ({
     month: MONTH_LABELS[r.month?.split("-")[1]] ?? r.month,
@@ -118,9 +207,37 @@ export default function Reports() {
   return (
     <Layout>
       <div className="p-8 max-w-7xl mx-auto">
-        <div className="mb-7">
-          <h1 className="text-2xl font-serif font-semibold text-foreground">Reports</h1>
-          <p className="text-sm text-muted-foreground mt-1">Platform-wide performance analytics</p>
+        <div className="mb-7 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-serif font-semibold text-foreground">Reports</h1>
+            <p className="text-sm text-muted-foreground mt-1">Platform-wide performance analytics</p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-1.5 bg-muted/50 border border-border rounded-lg p-1">
+              <Calendar size={13} className="text-muted-foreground ml-1.5 flex-shrink-0" />
+              {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    period === p
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background"
+                  }`}
+                >
+                  {PERIOD_LABELS[p]}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={exportReportsCSV}
+              disabled={clients.length === 0 && suppliers.length === 0 && products.length === 0}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-card text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              data-testid="button-export-reports"
+            >
+              <Download size={13} /> Download CSV
+            </button>
+          </div>
         </div>
 
         {/* Summary KPIs */}
@@ -376,44 +493,158 @@ export default function Reports() {
           })()}
         </div>
 
-        {/* Top Clients */}
-        <div className="bg-card border border-card-border rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-border flex items-center gap-2">
-            <Users size={15} className="text-muted-foreground" />
-            <p className="text-sm font-semibold text-foreground">Top Clients by Spend</p>
+        {/* Invoice Aging (AR) */}
+        <div className="bg-card border border-card-border rounded-xl p-5 shadow-sm mb-6">
+          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Receipt size={15} className="text-primary" />
+                <p className="text-sm font-semibold text-foreground">Accounts Receivable Aging</p>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">Outstanding invoices by days past due</p>
+            </div>
+            {!agingLoading && (invoiceAging as any)?.total_outstanding > 0 && (
+              <div className="text-right">
+                <p className="text-xl font-bold text-foreground tabular-nums">{formatKES((invoiceAging as any).total_outstanding)}</p>
+                <p className="text-[11px] text-muted-foreground">total outstanding · {(invoiceAging as any).total_invoices} invoices</p>
+              </div>
+            )}
           </div>
-          {clientsLoading ? (
-            <div className="p-4 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
-          ) : clients.length === 0 ? (
-            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">No order data yet</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-muted/30">
-                <tr>
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground">#</th>
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground">Company</th>
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground hidden sm:table-cell">Tier</th>
-                  <th className="text-right px-5 py-2.5 text-xs font-semibold text-muted-foreground">Orders</th>
-                  <th className="text-right px-5 py-2.5 text-xs font-semibold text-muted-foreground">Total Spend</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {clients.map((c: any, i: number) => (
-                  <tr key={c.corporate_id ?? i} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-5 py-3 text-xs font-bold text-muted-foreground/50 tabular-nums">{i + 1}</td>
-                    <td className="px-5 py-3 font-medium text-foreground">{c.corporate_name}</td>
-                    <td className="px-5 py-3 hidden sm:table-cell">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${TIER_COLORS[c.tier] ?? ""}`}>
-                        {TIER_LABEL[c.tier] ?? c.tier}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-right text-muted-foreground tabular-nums">{c.total_orders}</td>
-                    <td className="px-5 py-3 text-right font-semibold text-foreground tabular-nums">{formatKES(c.total_spend)}</td>
+          {agingLoading ? (
+            <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-9" />)}</div>
+          ) : (() => {
+            const aging = invoiceAging as any;
+            if (!aging) return null;
+            const buckets = [
+              { key: "current",     label: "Current (not yet due)", color: "bg-blue-400",  textColor: "text-blue-700",  border: "border-blue-200",  bg: "bg-blue-50" },
+              { key: "days_1_30",   label: "1–30 days overdue",     color: "bg-amber-400", textColor: "text-amber-700", border: "border-amber-200", bg: "bg-amber-50" },
+              { key: "days_31_60",  label: "31–60 days overdue",    color: "bg-orange-400",textColor: "text-orange-700",border: "border-orange-200",bg: "bg-orange-50" },
+              { key: "days_61_90",  label: "61–90 days overdue",    color: "bg-red-400",   textColor: "text-red-700",   border: "border-red-200",   bg: "bg-red-50" },
+              { key: "days_90plus", label: "90+ days overdue",      color: "bg-red-700",   textColor: "text-red-900",   border: "border-red-300",   bg: "bg-red-100" },
+            ];
+            const total = aging.total_outstanding || 1;
+            const hasAny = buckets.some(b => (aging.buckets?.[b.key]?.amount ?? 0) > 0);
+            if (!hasAny) return (
+              <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                No outstanding invoices
+              </div>
+            );
+            return (
+              <div className="space-y-3">
+                {buckets.map(({ key, label, color, textColor, border, bg }) => {
+                  const bucket = aging.buckets?.[key] ?? { count: 0, amount: 0 };
+                  const pct = total > 0 ? Math.round((bucket.amount / total) * 100) : 0;
+                  return (
+                    <div key={key}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`w-2 h-2 rounded-full ${color} flex-shrink-0`} />
+                          <span className="text-xs text-muted-foreground">{label}</span>
+                          {bucket.count > 0 && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${bg} ${textColor} border ${border}`}>
+                              {bucket.count} inv
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-xs font-semibold tabular-nums ${bucket.count > 0 ? textColor : "text-muted-foreground"}`}>
+                          {formatKES(bucket.amount)}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Top Clients + Top Suppliers */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {/* Top Clients */}
+          <div className="bg-card border border-card-border rounded-xl overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+              <Users size={15} className="text-muted-foreground" />
+              <p className="text-sm font-semibold text-foreground">Top Clients by Spend</p>
+            </div>
+            {clientsLoading ? (
+              <div className="p-4 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
+            ) : clients.length === 0 ? (
+              <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">No order data yet</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-muted/30">
+                  <tr>
+                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground">#</th>
+                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground">Company</th>
+                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground hidden sm:table-cell">Tier</th>
+                    <th className="text-right px-5 py-2.5 text-xs font-semibold text-muted-foreground">Orders</th>
+                    <th className="text-right px-5 py-2.5 text-xs font-semibold text-muted-foreground">Spend</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {clients.map((c: any, i: number) => (
+                    <tr key={c.corporate_id ?? i} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-5 py-3 text-xs font-bold text-muted-foreground/50 tabular-nums">{i + 1}</td>
+                      <td className="px-5 py-3 font-medium text-foreground">{c.corporate_name}</td>
+                      <td className="px-5 py-3 hidden sm:table-cell">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${TIER_COLORS[c.tier] ?? ""}`}>
+                          {TIER_LABEL[c.tier] ?? c.tier}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-right text-muted-foreground tabular-nums">{c.total_orders}</td>
+                      <td className="px-5 py-3 text-right font-semibold text-foreground tabular-nums">{formatKES(c.total_spend)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Top Suppliers */}
+          <div className="bg-card border border-card-border rounded-xl overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+              <ShieldCheck size={15} className="text-muted-foreground" />
+              <p className="text-sm font-semibold text-foreground">Top Suppliers by Revenue</p>
+            </div>
+            {suppliersLoading ? (
+              <div className="p-4 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
+            ) : suppliers.length === 0 ? (
+              <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">No order data yet</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-muted/30">
+                  <tr>
+                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground">#</th>
+                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground">Supplier</th>
+                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-muted-foreground hidden sm:table-cell">County</th>
+                    <th className="text-right px-5 py-2.5 text-xs font-semibold text-muted-foreground">Orders</th>
+                    <th className="text-right px-5 py-2.5 text-xs font-semibold text-muted-foreground">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {suppliers.map((s: any, i: number) => (
+                    <tr key={s.supplier_id ?? i} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-5 py-3 text-xs font-bold text-muted-foreground/50 tabular-nums">{i + 1}</td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-foreground">{s.supplier_name}</span>
+                          {s.is_verified && (
+                            <ShieldCheck size={11} className="text-green-600 flex-shrink-0" title="Verified" />
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-xs text-muted-foreground hidden sm:table-cell">{s.county ?? "—"}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground tabular-nums">{s.total_orders}</td>
+                      <td className="px-5 py-3 text-right font-semibold text-foreground tabular-nums">{formatKES(s.total_revenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       </div>
     </Layout>

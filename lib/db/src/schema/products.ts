@@ -15,6 +15,7 @@ export const productsTable = pgTable("products", {
   bulkTiers: jsonb("bulk_tiers").notNull().default("[]"),
   moq: integer("moq").notNull().default(1),
   leadTimeDays: integer("lead_time_days").notNull().default(7),
+  stockQty: integer("stock_qty"),
   origin: text("origin").notNull(),
   tags: text("tags").array().notNull().default([]),
   occasionTags: text("occasion_tags").array().notNull().default([]),

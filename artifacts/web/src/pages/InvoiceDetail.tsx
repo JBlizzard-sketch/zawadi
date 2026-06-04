@@ -1,18 +1,51 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, FileText, Send, CheckCircle2, Printer, Building2, ShoppingCart } from "lucide-react";
+import { ArrowLeft, FileText, Send, CheckCircle2, Printer, Building2, ShoppingCart, X, Banknote, CreditCard, Landmark, Smartphone, MessageCircle, Package } from "lucide-react";
 import { useGetInvoice, getGetInvoiceQueryKey } from "@workspace/api-client-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, INVOICE_STATUS_COLORS } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import Layout from "@/components/layout/Layout";
+
+const PAYMENT_METHODS = [
+  { value: "mpesa", label: "M-PESA", icon: Smartphone, color: "text-green-700 bg-green-50 border-green-200" },
+  { value: "bank_transfer", label: "Bank Transfer", icon: Landmark, color: "text-blue-700 bg-blue-50 border-blue-200" },
+  { value: "cheque", label: "Cheque", icon: FileText, color: "text-amber-700 bg-amber-50 border-amber-200" },
+  { value: "cash", label: "Cash", icon: Banknote, color: "text-stone-700 bg-stone-50 border-stone-200" },
+  { value: "card", label: "Card", icon: CreditCard, color: "text-purple-700 bg-purple-50 border-purple-200" },
+];
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  mpesa: "M-PESA", bank_transfer: "Bank Transfer", cheque: "Cheque", cash: "Cash", card: "Card",
+};
 
 const INVOICE_STATUS_LABELS: Record<string, string> = {
   draft: "Draft", sent: "Sent", paid: "Paid", overdue: "Overdue", cancelled: "Cancelled",
 };
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function buildWhatsAppInvoiceMsg(inv: any): string {
+  const lines: string[] = [];
+  lines.push(`*Invoice ${inv.invoiceNumber}*`);
+  if (inv.corporate_name) lines.push(`Client: ${inv.corporate_name}`);
+  lines.push(`Amount Due: KES ${Number(inv.totalAmount).toLocaleString("en-KE")} (incl. 16% VAT)`);
+  lines.push(`Due Date: ${formatDate(inv.dueDate)}`);
+  const items: any[] = inv.line_items ?? [];
+  if (items.length) {
+    lines.push("");
+    lines.push("*Items:*");
+    for (const item of items) {
+      lines.push(`• ${item.quantity}x ${item.productName} @ KES ${Number(item.unitPrice).toLocaleString("en-KE")} = KES ${Number(item.lineTotal).toLocaleString("en-KE")}`);
+    }
+  }
+  lines.push("");
+  lines.push("Please quote the invoice number when making payment.");
+  return lines.join("\n");
+}
 
 async function updateInvoiceStatus(id: string, status: string) {
   const res = await fetch(`${BASE}/api/invoices/${id}`, {
@@ -129,6 +162,12 @@ function PrintableInvoice({ inv, settings }: { inv: any; settings: any }) {
               <td style={{ padding: "4px 10px 4px 0", color: "#555" }}>Subtotal (excl. VAT)</td>
               <td style={{ textAlign: "right", padding: "4px 0", fontWeight: 500 }}>{formatKES(inv.amount)}</td>
             </tr>
+            {parseFloat(inv.order_discount_pct ?? "0") > 0 && (
+              <tr>
+                <td style={{ padding: "4px 10px 4px 0", color: "#b5451b" }}>Discount ({parseFloat(inv.order_discount_pct).toFixed(0)}%)</td>
+                <td style={{ textAlign: "right", padding: "4px 0", fontWeight: 500, color: "#b5451b" }}>− {formatKES(inv.order_discount_amount)}</td>
+              </tr>
+            )}
             <tr>
               <td style={{ padding: "4px 10px 4px 0", color: "#555" }}>VAT @ 16% (KRA)</td>
               <td style={{ textAlign: "right", padding: "4px 0", fontWeight: 500 }}>{formatKES(inv.vatAmount)}</td>
@@ -145,6 +184,12 @@ function PrintableInvoice({ inv, settings }: { inv: any; settings: any }) {
       {inv.paidAt && (
         <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 14px", marginBottom: 20 }}>
           <p style={{ color: "#166534", fontWeight: 700, margin: 0 }}>✓ PAID — Payment received on {formatDate(inv.paidAt)}</p>
+          {inv.paymentMethod && (
+            <p style={{ color: "#15803d", margin: "2px 0 0", fontSize: 10 }}>
+              Method: {PAYMENT_METHOD_LABELS[inv.paymentMethod] ?? inv.paymentMethod}
+              {inv.paymentRef ? ` · Ref: ${inv.paymentRef}` : ""}
+            </p>
+          )}
         </div>
       )}
 
@@ -183,11 +228,46 @@ export default function InvoiceDetail() {
     queryFn: () => fetch(`${BASE}/api/settings`).then(r => r.json()),
   });
 
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payMethod, setPayMethod] = useState("mpesa");
+  const [payRef, setPayRef] = useState("");
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [payNotes, setPayNotes] = useState("");
+  const [payError, setPayError] = useState("");
+
+  const openPayModal = () => {
+    setPayMethod("mpesa");
+    setPayRef("");
+    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayNotes("");
+    setPayError("");
+    setShowPayModal(true);
+  };
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(id) });
   const markSent = useMutation({ mutationFn: () => updateInvoiceStatus(id, "sent"), onSuccess: invalidate });
-  const markPaid = useMutation({ mutationFn: () => updateInvoiceStatus(id, "paid"), onSuccess: invalidate });
 
-  const busy = markSent.isPending || markPaid.isPending;
+  const recordPayment = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BASE}/api/invoices/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "paid",
+          payment_method: payMethod,
+          payment_ref: payRef || undefined,
+          payment_notes: payNotes || undefined,
+          paid_at: payDate,
+        }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "Failed to record payment"); }
+      return res.json();
+    },
+    onSuccess: () => { invalidate(); setShowPayModal(false); },
+    onError: (e: any) => setPayError(e.message ?? "Something went wrong."),
+  });
+
+  const busy = markSent.isPending || recordPayment.isPending;
 
   const handlePrint = () => window.print();
 
@@ -264,13 +344,13 @@ export default function InvoiceDetail() {
                 {canMarkPaid && (
                   <Button
                     size="sm"
-                    onClick={() => markPaid.mutate()}
+                    onClick={openPayModal}
                     disabled={busy}
                     className="gap-1.5 bg-green-700 hover:bg-green-800 text-white"
                     data-testid="button-mark-paid"
                   >
                     <CheckCircle2 size={13} />
-                    {markPaid.isPending ? "Recording…" : "Record Payment"}
+                    Record Payment
                   </Button>
                 )}
 
@@ -286,6 +366,16 @@ export default function InvoiceDetail() {
                     View Order
                   </Button>
                 )}
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsAppInvoiceMsg(inv))}`, "_blank")}
+                  className="gap-1.5 text-green-700 border-green-200 hover:bg-green-50"
+                  data-testid="button-whatsapp-share"
+                >
+                  <MessageCircle size={13} /> WhatsApp
+                </Button>
 
                 <Button
                   size="sm"
@@ -324,7 +414,73 @@ export default function InvoiceDetail() {
                   <p className="font-medium text-green-700">{formatDate(inv.paidAt)}</p>
                 </div>
               )}
+              {inv.paymentMethod && (
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Payment Method</p>
+                  <p className="font-medium text-foreground">{PAYMENT_METHOD_LABELS[inv.paymentMethod] ?? inv.paymentMethod}</p>
+                </div>
+              )}
+              {inv.paymentRef && (
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Transaction / Reference</p>
+                  <p className="font-mono text-sm font-semibold text-foreground bg-muted px-2 py-1 rounded inline-block" data-testid="text-payment-ref">{inv.paymentRef}</p>
+                </div>
+              )}
+              {inv.paymentNotes && (
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Payment Notes</p>
+                  <p className="text-sm text-foreground">{inv.paymentNotes}</p>
+                </div>
+              )}
             </div>
+
+            {/* Line Items */}
+            {(inv.line_items ?? []).length > 0 && (
+              <div className="border border-border rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-muted/30 border-b border-border flex items-center gap-2">
+                  <Package size={13} className="text-muted-foreground" />
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Items</p>
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/20">
+                    <tr>
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Product</th>
+                      <th className="text-right px-4 py-2 text-xs font-semibold text-muted-foreground">Qty</th>
+                      <th className="text-right px-4 py-2 text-xs font-semibold text-muted-foreground">Unit Price</th>
+                      <th className="text-right px-4 py-2 text-xs font-semibold text-muted-foreground">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {(inv.line_items as any[]).map((item: any, i: number) => (
+                      <tr key={i} data-testid={`row-invoice-line-${i}`}>
+                        <td className="px-4 py-2.5">
+                          <p className="font-medium text-foreground">{item.productName}</p>
+                          {item.brandedPackaging && <span className="text-[10px] text-primary">Branded packaging</span>}
+                          {item.personalisationText && <p className="text-[10px] text-muted-foreground italic">{item.personalisationText}</p>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-muted-foreground">{item.quantity}</td>
+                        <td className="px-4 py-2.5 text-right text-muted-foreground">{formatKES(item.unitPrice)}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold text-foreground">{formatKES(item.lineTotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {inv.status === "paid" && (
+              <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-5 py-3.5" data-testid="paid-banner">
+                <CheckCircle2 size={18} className="text-green-700 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-green-800">Payment Received</p>
+                  <p className="text-xs text-green-700">
+                    {inv.paymentMethod ? `${PAYMENT_METHOD_LABELS[inv.paymentMethod] ?? inv.paymentMethod}` : "Payment recorded"}
+                    {inv.paymentRef ? ` · Ref: ${inv.paymentRef}` : ""}
+                    {inv.paidAt ? ` · ${formatDate(inv.paidAt)}` : ""}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* VAT Breakdown */}
             <div className="bg-muted/40 rounded-xl p-5 space-y-3 text-sm">
@@ -333,6 +489,12 @@ export default function InvoiceDetail() {
                 <span className="text-muted-foreground">Subtotal (excl. VAT)</span>
                 <span className="font-medium" data-testid="text-amount">{formatKES(inv.amount)}</span>
               </div>
+              {parseFloat(inv.order_discount_pct ?? "0") > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-primary">Discount ({parseFloat(inv.order_discount_pct).toFixed(0)}%)</span>
+                  <span className="font-medium text-primary">− {formatKES(inv.order_discount_amount)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">VAT @ 16% (KRA)</span>
                 <span className="font-medium" data-testid="text-vat-amount">{formatKES(inv.vatAmount)}</span>
@@ -349,6 +511,99 @@ export default function InvoiceDetail() {
           </div>
         </div>
       </div>
+
+      {/* Payment Recording Modal */}
+      {showPayModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 bg-black/40 backdrop-blur-sm" data-testid="payment-modal">
+          <div className="bg-card border border-card-border rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h2 className="text-base font-serif font-semibold text-foreground">Record Payment</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{inv.invoiceNumber} · {formatKES(inv.totalAmount)}</p>
+              </div>
+              <button onClick={() => setShowPayModal(false)} className="text-muted-foreground hover:text-foreground transition-colors"><X size={18} /></button>
+            </div>
+            <div className="px-6 py-5 space-y-5">
+              {/* Payment Method */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-2.5 uppercase tracking-wide">Payment Method</label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {PAYMENT_METHODS.map(({ value, label, icon: Icon, color }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setPayMethod(value)}
+                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 text-xs font-semibold transition-all ${payMethod === value ? color + " border-current" : "bg-card text-muted-foreground border-border hover:bg-muted"}`}
+                      data-testid={`pay-method-${value}`}
+                    >
+                      <Icon size={18} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reference */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  {payMethod === "mpesa" ? "M-PESA Transaction Code" : payMethod === "bank_transfer" ? "Bank Reference / EFT No." : payMethod === "cheque" ? "Cheque Number" : "Reference (optional)"}
+                </label>
+                <Input
+                  value={payRef}
+                  onChange={e => setPayRef(e.target.value.toUpperCase())}
+                  placeholder={payMethod === "mpesa" ? "e.g. QHX7A2BC1D" : payMethod === "cheque" ? "e.g. 004521" : "Transaction reference…"}
+                  className="font-mono"
+                  data-testid="input-payment-ref"
+                />
+                {payMethod === "mpesa" && (
+                  <p className="text-[11px] text-muted-foreground/70 mt-1">Enter the M-PESA confirmation code sent via SMS</p>
+                )}
+              </div>
+
+              {/* Payment Date */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Payment Date</label>
+                <Input
+                  type="date"
+                  value={payDate}
+                  onChange={e => setPayDate(e.target.value)}
+                  max={new Date().toISOString().slice(0, 10)}
+                  data-testid="input-payment-date"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Notes <span className="font-normal text-muted-foreground/60">(optional)</span></label>
+                <textarea
+                  rows={2}
+                  value={payNotes}
+                  onChange={e => setPayNotes(e.target.value)}
+                  placeholder="e.g. Partial payment, remainder due next week…"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                  data-testid="textarea-payment-notes"
+                />
+              </div>
+
+              {payError && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{payError}</p>
+              )}
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-border">
+              <Button variant="outline" className="flex-1" onClick={() => setShowPayModal(false)}>Cancel</Button>
+              <Button
+                className="flex-1 bg-green-700 hover:bg-green-800 text-white gap-1.5"
+                onClick={() => recordPayment.mutate()}
+                disabled={recordPayment.isPending}
+                data-testid="button-confirm-payment"
+              >
+                <CheckCircle2 size={14} />
+                {recordPayment.isPending ? "Recording…" : "Confirm Payment"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

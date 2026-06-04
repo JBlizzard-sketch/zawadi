@@ -12,6 +12,8 @@ export const quotesTable = pgTable("quotes", {
   status: text("status", { enum: quoteStatusEnum }).notNull().default("draft"),
   items: jsonb("items").notNull().default("[]"),
   subtotal: numeric("subtotal", { precision: 16, scale: 2 }).notNull(),
+  discountPct: numeric("discount_pct", { precision: 5, scale: 2 }).notNull().default("0"),
+  discountAmount: numeric("discount_amount", { precision: 16, scale: 2 }).notNull().default("0"),
   vat: numeric("vat", { precision: 16, scale: 2 }).notNull(),
   total: numeric("total", { precision: 16, scale: 2 }).notNull(),
   notes: text("notes"),

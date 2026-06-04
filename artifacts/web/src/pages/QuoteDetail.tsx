@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, Send, XCircle, Printer, Building2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Send, XCircle, Printer, Building2, Copy, Truck, X, MessageCircle, Tag, Check } from "lucide-react";
 import { useGetQuote, getGetQuoteQueryKey, useConvertQuoteToOrder } from "@workspace/api-client-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, QUOTE_STATUS_COLORS } from "@/lib/format";
@@ -106,6 +107,12 @@ function PrintableQuote({ q, settings }: { q: any; settings: any }) {
               <td style={{ padding: "4px 10px 4px 0", color: "#555" }}>Subtotal (excl. VAT)</td>
               <td style={{ textAlign: "right", padding: "4px 0", fontWeight: 500 }}>{formatKES(q.subtotal)}</td>
             </tr>
+            {parseFloat(q.discountPct ?? "0") > 0 && (
+              <tr>
+                <td style={{ padding: "4px 10px 4px 0", color: "#b5451b" }}>Discount ({parseFloat(q.discountPct).toFixed(0)}%)</td>
+                <td style={{ textAlign: "right", padding: "4px 0", fontWeight: 500, color: "#b5451b" }}>− {formatKES(q.discountAmount)}</td>
+              </tr>
+            )}
             <tr>
               <td style={{ padding: "4px 10px 4px 0", color: "#555" }}>VAT @ 16% (KRA)</td>
               <td style={{ textAlign: "right", padding: "4px 0", fontWeight: 500 }}>{formatKES(q.vat)}</td>
@@ -143,6 +150,25 @@ function PrintableQuote({ q, settings }: { q: any; settings: any }) {
   );
 }
 
+function buildWhatsAppQuoteMsg(q: any): string {
+  const lines: string[] = [];
+  lines.push(`*Quotation ${q.reference ?? q.id?.slice(0, 8).toUpperCase()}*`);
+  if (q.corporate_name) lines.push(`Prepared for: ${q.corporate_name}`);
+  lines.push(`Total: KES ${Number(q.total).toLocaleString("en-KE")} (incl. 16% VAT)`);
+  lines.push(`Valid until: ${formatDate(q.validUntil)}`);
+  const items: any[] = q.items ?? [];
+  if (items.length) {
+    lines.push("");
+    lines.push("*Items:*");
+    for (const item of items) {
+      lines.push(`• ${item.quantity}x ${item.product_name} @ KES ${Number(item.unit_price).toLocaleString("en-KE")} = KES ${Number(item.line_total).toLocaleString("en-KE")}`);
+    }
+  }
+  lines.push("");
+  lines.push("To accept this quote, please reply to this message or contact us.");
+  return lines.join("\n");
+}
+
 async function updateQuoteStatus(id: string, status: string) {
   const res = await fetch(`${BASE}/api/quotes/${id}`, {
     method: "PUT",
@@ -157,6 +183,26 @@ export default function QuoteDetail() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [convertAddress, setConvertAddress] = useState("");
+  const [convertDate, setConvertDate] = useState("");
+
+  const [editingDiscount, setEditingDiscount] = useState(false);
+  const [discountInput, setDiscountInput] = useState("");
+
+  const applyDiscount = useMutation({
+    mutationFn: async (pct: number) => {
+      const res = await fetch(`${BASE}/api/quotes/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discount_pct: pct }),
+      });
+      if (!res.ok) throw new Error("Failed to apply discount");
+      return res.json();
+    },
+    onSuccess: () => { invalidate(); setEditingDiscount(false); },
+  });
 
   const { data: quote, isLoading } = useGetQuote(id, { query: { enabled: !!id, queryKey: getGetQuoteQueryKey(id) } });
   const convertToOrder = useConvertQuoteToOrder();
@@ -173,13 +219,57 @@ export default function QuoteDetail() {
   const markAccepted = useMutation({ mutationFn: () => updateQuoteStatus(id, "accepted"), onSuccess: invalidate });
   const markRejected = useMutation({ mutationFn: () => updateQuoteStatus(id, "rejected"), onSuccess: invalidate });
 
+  const duplicateQuote = useMutation({
+    mutationFn: async () => {
+      const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const res = await fetch(`${BASE}/api/quotes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          corporate_id: q.corporateId,
+          notes: q.notes ? `Copy of ${q.reference ?? id.slice(0, 8)} — ${q.notes}` : `Copy of ${q.reference ?? id.slice(0, 8)}`,
+          valid_until: validUntil,
+          items: (q.items ?? []).map((item: any) => ({
+            product_id: item.productId,
+            quantity: item.quantity,
+            unit_price: item.unitPrice,
+            branded_packaging: item.brandedPackaging ?? false,
+          })),
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to duplicate quote");
+      return res.json();
+    },
+    onSuccess: (newQuote: any) => {
+      queryClient.invalidateQueries({ queryKey: ["listQuotes"] });
+      setLocation(`/quotes/${newQuote.id}`);
+    },
+  });
+
+  const openConvertModal = () => {
+    setConvertAddress("");
+    setConvertDate("");
+    setShowConvertModal(true);
+  };
+
   const handleConvert = () => {
-    convertToOrder.mutate({ id }, {
-      onSuccess: (order: any) => {
-        invalidate();
-        setLocation(`/orders/${order.id}`);
-      },
-    });
+    fetch(`${BASE}/api/quotes/${id}/convert`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        delivery_address: convertAddress.trim() || undefined,
+        delivery_date: convertDate || undefined,
+      }),
+    })
+      .then(r => r.json())
+      .then((order: any) => {
+        if (order?.id) {
+          invalidate();
+          queryClient.invalidateQueries({ queryKey: ["listOrders"] });
+          setShowConvertModal(false);
+          setLocation(`/orders/${order.id}`);
+        }
+      });
   };
 
   if (isLoading) {
@@ -212,7 +302,7 @@ export default function QuoteDetail() {
   const canMarkSent = isDraft;
   const canMarkAccepted = isSent;
   const canMarkRejected = isSent;
-  const busy = markSent.isPending || markAccepted.isPending || markRejected.isPending || convertToOrder.isPending;
+  const busy = markSent.isPending || markAccepted.isPending || markRejected.isPending || convertToOrder.isPending || duplicateQuote.isPending;
 
   return (
     <Layout>
@@ -271,11 +361,26 @@ export default function QuoteDetail() {
               )}
 
               {canConvert && q.status !== "rejected" && (
-                <Button size="sm" onClick={handleConvert} disabled={busy} className="gap-2" data-testid="button-convert-to-order">
-                  {convertToOrder.isPending ? "Converting..." : "Convert to Order"}
-                  <ArrowRight size={14} />
+                <Button size="sm" onClick={openConvertModal} disabled={busy} className="gap-2" data-testid="button-convert-to-order">
+                  Convert to Order
+                  <Truck size={13} />
                 </Button>
               )}
+
+              <Button size="sm" variant="outline" onClick={() => duplicateQuote.mutate()} disabled={busy} className="gap-1.5" data-testid="button-duplicate-quote">
+                <Copy size={13} />
+                {duplicateQuote.isPending ? "Duplicating…" : "Duplicate"}
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsAppQuoteMsg(q))}`, "_blank")}
+                className="gap-1.5 text-green-700 border-green-200 hover:bg-green-50"
+                data-testid="button-whatsapp-share"
+              >
+                <MessageCircle size={13} /> WhatsApp
+              </Button>
 
               <Button size="sm" variant="outline" onClick={() => window.print()} className="gap-1.5" data-testid="button-print-quote">
                 <Printer size={13} /> Print / PDF
@@ -322,6 +427,63 @@ export default function QuoteDetail() {
               <span className="text-muted-foreground">Subtotal</span>
               <span className="font-medium">{formatKES(q.subtotal)}</span>
             </div>
+
+            {/* Discount row */}
+            {isDraft ? (
+              editingDiscount ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-primary text-xs font-medium flex-1">Discount %</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={discountInput}
+                    onChange={e => setDiscountInput(e.target.value)}
+                    className="w-16 h-7 rounded border border-input bg-background px-2 text-xs text-right focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    placeholder="0"
+                    autoFocus
+                    data-testid="input-discount-pct"
+                  />
+                  <button
+                    onClick={() => applyDiscount.mutate(parseFloat(discountInput) || 0)}
+                    disabled={applyDiscount.isPending}
+                    className="text-primary hover:text-primary/80 transition-colors"
+                    title="Apply"
+                    data-testid="button-apply-discount"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button onClick={() => setEditingDiscount(false)} className="text-muted-foreground hover:text-foreground transition-colors" title="Cancel">
+                    <X size={13} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => { setDiscountInput(parseFloat(q.discountPct ?? "0").toFixed(0)); setEditingDiscount(true); }}
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                    data-testid="button-edit-discount"
+                  >
+                    <Tag size={11} />
+                    {parseFloat(q.discountPct ?? "0") > 0
+                      ? `Discount (${parseFloat(q.discountPct).toFixed(0)}%) — edit`
+                      : "Add discount"}
+                  </button>
+                  {parseFloat(q.discountPct ?? "0") > 0 && (
+                    <span className="font-medium text-primary">− {formatKES(q.discountAmount)}</span>
+                  )}
+                </div>
+              )
+            ) : (
+              parseFloat(q.discountPct ?? "0") > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-primary">Discount ({parseFloat(q.discountPct).toFixed(0)}%)</span>
+                  <span className="font-medium text-primary">− {formatKES(q.discountAmount)}</span>
+                </div>
+              )
+            )}
+
             <div className="flex justify-between">
               <span className="text-muted-foreground">VAT (16%)</span>
               <span className="font-medium">{formatKES(q.vat)}</span>
@@ -340,6 +502,55 @@ export default function QuoteDetail() {
           </div>
         )}
       </div>
+
+      {/* Convert to Order — delivery modal */}
+      {showConvertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-card border border-card-border rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Truck size={18} className="text-primary" />
+                <h2 className="text-base font-semibold text-foreground">Convert to Order</h2>
+              </div>
+              <button onClick={() => setShowConvertModal(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Optionally add delivery details for this order. You can always update them later.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Delivery Address <span className="text-muted-foreground/50">(optional)</span></label>
+                <textarea
+                  rows={2}
+                  value={convertAddress}
+                  onChange={e => setConvertAddress(e.target.value)}
+                  placeholder="e.g. Safaricom HQ, Waiyaki Way, Westlands, Nairobi"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                  data-testid="input-convert-address"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Expected Delivery Date <span className="text-muted-foreground/50">(optional)</span></label>
+                <input
+                  type="date"
+                  value={convertDate}
+                  onChange={e => setConvertDate(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  data-testid="input-convert-date"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <Button className="flex-1 gap-2" onClick={handleConvert} data-testid="button-confirm-convert">
+                <Truck size={13} /> Confirm & Create Order
+              </Button>
+              <Button variant="outline" onClick={() => setShowConvertModal(false)}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

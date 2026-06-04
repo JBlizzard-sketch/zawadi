@@ -23,6 +23,11 @@ import Invoices from "@/pages/Invoices";
 import InvoiceDetail from "@/pages/InvoiceDetail";
 import Reports from "@/pages/Reports";
 import Settings from "@/pages/Settings";
+import Hampers from "@/pages/Hampers";
+import Categories from "@/pages/Categories";
+import PurchaseOrders from "@/pages/PurchaseOrders";
+import PurchaseOrderDetail from "@/pages/PurchaseOrderDetail";
+import Stock from "@/pages/Stock";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,6 +60,11 @@ function Router() {
       <Route path="/invoices/:id" component={InvoiceDetail} />
       <Route path="/reports" component={Reports} />
       <Route path="/settings" component={Settings} />
+      <Route path="/hampers" component={Hampers} />
+      <Route path="/categories" component={Categories} />
+      <Route path="/purchase-orders" component={PurchaseOrders} />
+      <Route path="/purchase-orders/:id" component={PurchaseOrderDetail} />
+      <Route path="/stock" component={Stock} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -17,6 +17,7 @@ export const corporatesTable = pgTable("corporates", {
   tier: text("tier", { enum: corporateTierEnum }).notNull().default("standard"),
   paymentTerms: text("payment_terms", { enum: paymentTermsEnum }),
   accountManagerName: text("account_manager_name"),
+  creditLimit: numeric("credit_limit", { precision: 16, scale: 2 }),
   totalOrders: integer("total_orders").notNull().default(0),
   totalSpend: numeric("total_spend", { precision: 16, scale: 2 }).notNull().default("0"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

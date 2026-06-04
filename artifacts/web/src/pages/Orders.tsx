@@ -23,7 +23,27 @@ const STATUSES = [
 const VAT_RATE = 0.16;
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-interface LineItem { productId: string; productName: string; unitPrice: number; quantity: number; }
+interface LineItem {
+  productId: string;
+  productName: string;
+  basePrice: number;
+  unitPrice: number;
+  bulkTiers: Array<{ min_qty: number; price_per_unit: number }>;
+  quantity: number;
+}
+
+function getEffectivePrice(
+  basePrice: number,
+  tiers: Array<{ min_qty: number; price_per_unit: number }>,
+  qty: number
+): number {
+  if (!tiers?.length) return basePrice;
+  const sorted = [...tiers].sort((a, b) => b.min_qty - a.min_qty);
+  for (const tier of sorted) {
+    if (qty >= tier.min_qty) return tier.price_per_unit;
+  }
+  return basePrice;
+}
 
 function exportCSV(rows: any[]) {
   if (!rows.length) return;
@@ -48,26 +68,27 @@ export default function Orders() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
+  const [corporateId, setCorporateId] = useState("");
   const [offset, setOffset] = useState(0);
   const limit = 20;
 
   const [showModal, setShowModal] = useState(false);
   const [modalCorporateId, setModalCorporateId] = useState("");
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ productId: "", productName: "", unitPrice: 0, quantity: 1 }]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ productId: "", productName: "", basePrice: 0, unitPrice: 0, bulkTiers: [], quantity: 1 }]);
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [modalNotes, setModalNotes] = useState("");
   const [submitError, setSubmitError] = useState("");
 
-  const params = { status: status || undefined, search: search || undefined, limit, offset };
-  const { data: ordersData, isLoading } = useListOrders(params, { query: { queryKey: getListOrdersQueryKey(params) } });
+  const params = { status: status || undefined, search: search || undefined, corporate_id: corporateId || undefined, limit, offset };
+  const { data: ordersData, isLoading } = useListOrders(params as any, { query: { queryKey: getListOrdersQueryKey(params as any) } });
 
   const orders = (ordersData as any)?.items ?? [];
   const total = (ordersData as any)?.total ?? 0;
   const totalPages = Math.ceil(total / limit);
   const currentPage = Math.floor(offset / limit) + 1;
 
-  const { data: corporates } = useListCorporates(undefined, { query: { queryKey: getListCorporatesQueryKey(), enabled: showModal } });
+  const { data: corporates } = useListCorporates(undefined, { query: { queryKey: getListCorporatesQueryKey() } });
   const { data: productsData } = useListProducts({ limit: 50, offset: 0 }, { query: { queryKey: getListProductsQueryKey({ limit: 50, offset: 0 }), enabled: showModal } });
 
   const corporateList = (corporates as any[]) ?? [];
@@ -91,19 +112,27 @@ export default function Orders() {
   });
 
   const openModal = () => {
-    setModalCorporateId(""); setLineItems([{ productId: "", productName: "", unitPrice: 0, quantity: 1 }]);
+    setModalCorporateId(""); setLineItems([{ productId: "", productName: "", basePrice: 0, unitPrice: 0, bulkTiers: [], quantity: 1 }]);
     setDeliveryAddress(""); setDeliveryDate(""); setModalNotes(""); setSubmitError("");
     setShowModal(true);
   };
 
   const setLineProduct = (i: number, productId: string) => {
     const p = productList.find((p: any) => p.id === productId);
+    const basePrice = parseFloat(p?.unitPrice ?? "0");
+    const bulkTiers: Array<{ min_qty: number; price_per_unit: number }> = p?.bulkTiers ?? [];
+    const qty = lineItems[i]?.quantity ?? 1;
+    const unitPrice = getEffectivePrice(basePrice, bulkTiers, qty);
     setLineItems((prev) => prev.map((item, idx) =>
-      idx === i ? { ...item, productId, productName: p?.name ?? "", unitPrice: parseFloat(p?.unitPrice ?? "0") } : item
+      idx === i ? { ...item, productId, productName: p?.name ?? "", basePrice, bulkTiers, unitPrice } : item
     ));
   };
-  const setLineQty = (i: number, qty: number) => setLineItems((prev) => prev.map((item, idx) => idx === i ? { ...item, quantity: Math.max(1, qty) } : item));
-  const addLine = () => setLineItems((prev) => [...prev, { productId: "", productName: "", unitPrice: 0, quantity: 1 }]);
+  const setLineQty = (i: number, qty: number) => setLineItems((prev) => prev.map((item, idx) => {
+    if (idx !== i) return item;
+    const newQty = Math.max(1, qty);
+    return { ...item, quantity: newQty, unitPrice: getEffectivePrice(item.basePrice, item.bulkTiers, newQty) };
+  }));
+  const addLine = () => setLineItems((prev) => [...prev, { productId: "", productName: "", basePrice: 0, unitPrice: 0, bulkTiers: [], quantity: 1 }]);
   const removeLine = (i: number) => setLineItems((prev) => prev.filter((_, idx) => idx !== i));
 
   const validLines = lineItems.filter((l) => l.productId);
@@ -157,6 +186,17 @@ export default function Orders() {
                 </button>
               )}
             </div>
+            <Select value={corporateId} onValueChange={(v) => { setCorporateId(v === "all" ? "" : v); setOffset(0); }}>
+              <SelectTrigger className="w-44 h-9 text-sm" data-testid="select-corporate-filter">
+                <SelectValue placeholder="All clients" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All clients</SelectItem>
+                {corporateList.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={status} onValueChange={(v) => { setStatus(v === "all" ? "" : v); setOffset(0); }}>
               <SelectTrigger className="w-44 h-9 text-sm" data-testid="select-status">
                 <SelectValue placeholder="All statuses" />
@@ -308,38 +348,50 @@ export default function Orders() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {lineItems.map((line, i) => (
-                    <div key={i} className="flex gap-2 items-center" data-testid={`line-item-${i}`}>
-                      <div className="relative flex-1">
-                        <select
-                          value={line.productId}
-                          onChange={(e) => setLineProduct(i, e.target.value)}
-                          className="w-full h-9 rounded-lg border border-input bg-background px-3 pr-8 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-                          data-testid={`select-product-${i}`}
-                        >
-                          <option value="">— Select product —</option>
-                          {productList.map((p: any) => (
-                            <option key={p.id} value={p.id}>{p.name} ({formatKES(p.unitPrice)})</option>
-                          ))}
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2.5 top-2.5 text-muted-foreground pointer-events-none" />
+                  {lineItems.map((line, i) => {
+                    const hasDiscount = line.productId && line.unitPrice < line.basePrice;
+                    return (
+                    <div key={i} data-testid={`line-item-${i}`}>
+                      <div className="flex gap-2 items-center">
+                        <div className="relative flex-1">
+                          <select
+                            value={line.productId}
+                            onChange={(e) => setLineProduct(i, e.target.value)}
+                            className="w-full h-9 rounded-lg border border-input bg-background px-3 pr-8 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            data-testid={`select-product-${i}`}
+                          >
+                            <option value="">— Select product —</option>
+                            {productList.map((p: any) => (
+                              <option key={p.id} value={p.id}>{p.name} ({formatKES(p.unitPrice)})</option>
+                            ))}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-2.5 top-2.5 text-muted-foreground pointer-events-none" />
+                        </div>
+                        <input
+                          type="number"
+                          min={1}
+                          value={line.quantity}
+                          onChange={(e) => setLineQty(i, parseInt(e.target.value) || 1)}
+                          className="w-20 h-9 rounded-lg border border-input bg-background px-3 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          data-testid={`input-qty-${i}`}
+                          placeholder="Qty"
+                        />
+                        {lineItems.length > 1 && (
+                          <button onClick={() => removeLine(i)} className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0" data-testid={`button-remove-line-${i}`}>
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
-                      <input
-                        type="number"
-                        min={1}
-                        value={line.quantity}
-                        onChange={(e) => setLineQty(i, parseInt(e.target.value) || 1)}
-                        className="w-20 h-9 rounded-lg border border-input bg-background px-3 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        data-testid={`input-qty-${i}`}
-                        placeholder="Qty"
-                      />
-                      {lineItems.length > 1 && (
-                        <button onClick={() => removeLine(i)} className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0" data-testid={`button-remove-line-${i}`}>
-                          <Trash2 size={14} />
-                        </button>
+                      {hasDiscount && (
+                        <p className="text-[10px] text-green-700 font-medium mt-1 ml-1 flex items-center gap-1">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />
+                          Volume price: {formatKES(line.unitPrice)}/unit
+                          <span className="text-muted-foreground line-through ml-1">{formatKES(line.basePrice)}</span>
+                        </p>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

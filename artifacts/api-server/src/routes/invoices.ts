@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { invoicesTable, ordersTable, orderItemsTable, corporatesTable, insertInvoiceSchema } from "@workspace/db/schema";
-import { eq, and, inArray, lt, sql } from "drizzle-orm";
+import { eq, and, inArray, lt, sql, desc } from "drizzle-orm";
 
 const router = Router();
 
@@ -15,21 +15,37 @@ router.get("/invoices", async (req, res) => {
         lt(invoicesTable.dueDate, sql`now()`),
       ));
 
-    const { corporate_id, status } = req.query as Record<string, string>;
+    const { corporate_id, status, search, limit: limitStr, offset: offsetStr } = req.query as Record<string, string>;
+    const limit = Math.min(parseInt(limitStr ?? "50") || 50, 200);
+    const offset = parseInt(offsetStr ?? "0") || 0;
+
     const conditions = [];
     if (corporate_id) conditions.push(eq(invoicesTable.corporateId, corporate_id));
     if (status) conditions.push(eq(invoicesTable.status, status as any));
 
     const invoices = await db.select().from(invoicesTable)
       .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(invoicesTable.createdAt);
+      .orderBy(desc(invoicesTable.createdAt));
 
     const corpIds = [...new Set(invoices.map((i) => i.corporateId).filter(Boolean))] as string[];
     const corps = corpIds.length
       ? await db.select({ id: corporatesTable.id, name: corporatesTable.name }).from(corporatesTable).where(inArray(corporatesTable.id, corpIds))
       : [];
     const corpMap = Object.fromEntries(corps.map((c) => [c.id, c.name]));
-    res.json(invoices.map((i) => ({ ...i, corporate_name: i.corporateId ? (corpMap[i.corporateId] ?? null) : null })));
+
+    let enriched = invoices.map((i) => ({ ...i, corporate_name: i.corporateId ? (corpMap[i.corporateId] ?? null) : null }));
+
+    if (search) {
+      const q = search.toLowerCase();
+      enriched = enriched.filter((i) =>
+        (i.invoiceNumber ?? "").toLowerCase().includes(q) ||
+        (i.corporate_name ?? "").toLowerCase().includes(q)
+      );
+    }
+
+    const total = enriched.length;
+    const items = enriched.slice(offset, offset + limit);
+    res.json({ items, total });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch invoices" });
@@ -56,9 +72,18 @@ router.get("/invoices/:id", async (req, res) => {
       corporateAddress = corp?.city ?? null;
     }
 
+    let orderDiscountPct = "0";
+    let orderDiscountAmount = "0";
+
     if (invoice.orderId) {
-      const [order] = await db.select({ reference: ordersTable.reference }).from(ordersTable).where(eq(ordersTable.id, invoice.orderId));
+      const [order] = await db.select({
+        reference: ordersTable.reference,
+        discountPct: ordersTable.discountPct,
+        discountAmount: ordersTable.discountAmount,
+      }).from(ordersTable).where(eq(ordersTable.id, invoice.orderId));
       orderReference = order?.reference ?? null;
+      orderDiscountPct = order?.discountPct ?? "0";
+      orderDiscountAmount = order?.discountAmount ?? "0";
 
       const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, invoice.orderId));
       lineItems = items.map(item => ({
@@ -76,6 +101,8 @@ router.get("/invoices/:id", async (req, res) => {
       corporate_name: corporateName,
       corporate_address: corporateAddress,
       order_reference: orderReference,
+      order_discount_pct: orderDiscountPct,
+      order_discount_amount: orderDiscountAmount,
       line_items: lineItems,
     });
   } catch (err) {
@@ -96,6 +123,10 @@ router.post("/invoices", async (req, res) => {
     const count = await db.select().from(invoicesTable);
     const invoiceNumber = `INV-${year}-${String(count.length + 1).padStart(4, "0")}`;
 
+    const PT_DAYS: Record<string, number> = { prepaid: 0, net_7: 7, net_15: 15, net_14: 14, net_30: 30, net_60: 60 };
+    const termsDays = PT_DAYS[corporate?.paymentTerms ?? "net_30"] ?? 30;
+    const autoDate = new Date(Date.now() + termsDays * 86_400_000);
+
     const [invoice] = await db.insert(invoicesTable).values({
       orderId: order.id,
       corporateId: order.corporateId,
@@ -105,7 +136,7 @@ router.post("/invoices", async (req, res) => {
       vatAmount: order.vat,
       totalAmount: order.total,
       status: "draft",
-      dueDate: due_date ? new Date(due_date) : null,
+      dueDate: due_date ? new Date(due_date) : autoDate,
     }).returning();
 
     res.status(201).json(invoice);
@@ -117,10 +148,15 @@ router.post("/invoices", async (req, res) => {
 
 router.put("/invoices/:id", async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, payment_method, payment_ref, payment_notes, paid_at } = req.body;
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (status) updateData.status = status;
-    if (status === "paid") updateData.paidAt = new Date();
+    if (status === "paid") {
+      updateData.paidAt = paid_at ? new Date(paid_at) : new Date();
+      if (payment_method !== undefined) updateData.paymentMethod = payment_method;
+      if (payment_ref !== undefined) updateData.paymentRef = payment_ref;
+      if (payment_notes !== undefined) updateData.paymentNotes = payment_notes;
+    }
     const [updated] = await db.update(invoicesTable)
       .set(updateData)
       .where(eq(invoicesTable.id, req.params.id))

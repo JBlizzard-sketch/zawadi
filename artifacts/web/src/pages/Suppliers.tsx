@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Layers, Search, CheckCircle2, MapPin, Plus, X } from "lucide-react";
+import { Layers, Search, CheckCircle2, MapPin, Plus, X, Clock, Eye, CheckCheck, XCircle } from "lucide-react";
 import { useListSuppliers, getListSuppliersQueryKey } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +14,21 @@ import Layout from "@/components/layout/Layout";
 const COUNTIES = ["Nairobi", "Kajiado", "Murang'a", "Kirinyaga", "Mombasa", "Kisumu", "Nakuru", "Kiambu", "Machakos", "Nyeri", "Meru", "Embu", "Laikipia"];
 const ONBOARDING_STATUSES = ["pending", "in_review", "approved", "rejected"];
 const ONBOARDING_LABELS: Record<string, string> = { pending: "Pending", in_review: "In Review", approved: "Approved", rejected: "Rejected" };
+const ONBOARDING_COLORS: Record<string, string> = {
+  pending: "bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200",
+  in_review: "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200",
+  approved: "bg-green-100 text-green-700 border-green-200 hover:bg-green-200",
+  rejected: "bg-red-100 text-red-600 border-red-200 hover:bg-red-200",
+};
+const ONBOARDING_ACTIVE: Record<string, string> = {
+  pending: "bg-stone-600 text-white border-stone-600",
+  in_review: "bg-blue-600 text-white border-blue-600",
+  approved: "bg-green-700 text-white border-green-700",
+  rejected: "bg-red-600 text-white border-red-600",
+};
+const ONBOARDING_ICONS: Record<string, React.ElementType> = {
+  pending: Clock, in_review: Eye, approved: CheckCheck, rejected: XCircle,
+};
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -23,15 +39,27 @@ export default function Suppliers() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [county, setCounty] = useState("");
+  const [onboardingStatus, setOnboardingStatus] = useState("");
+  const [offset, setOffset] = useState(0);
+  const LIMIT = 24;
+
+  const { data: pipeline } = useQuery<Record<string, number>>({
+    queryKey: ["suppliers-pipeline"],
+    queryFn: () => fetch(`${BASE}/api/suppliers/pipeline`).then(r => r.json()),
+    staleTime: 30_000,
+  });
 
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const params = { search: search || undefined, county: county || undefined };
+  const params = { search: search || undefined, county: county || undefined, onboarding_status: onboardingStatus || undefined, limit: LIMIT, offset } as any;
   const { data: suppliers, isLoading } = useListSuppliers(params, { query: { queryKey: getListSuppliersQueryKey(params) } });
-  const supplierList = (suppliers as any[]) ?? [];
+  const supplierList = (suppliers as any)?.items ?? [];
+  const total: number = (suppliers as any)?.total ?? 0;
+  const totalPages = Math.ceil(total / LIMIT);
+  const currentPage = Math.floor(offset / LIMIT) + 1;
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -76,12 +104,39 @@ export default function Suppliers() {
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-serif font-semibold text-foreground">Supplier Directory</h1>
-            <p className="text-sm text-muted-foreground mt-1">Kenya's finest artisan producers and their stories</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {isLoading ? "Loading…" : `${total} supplier${total !== 1 ? "s" : ""} · Kenya's finest artisan producers`}
+            </p>
           </div>
           <Button size="sm" onClick={openModal} className="gap-1.5" data-testid="button-new-supplier">
             <Plus size={14} /> New Supplier
           </Button>
         </div>
+
+        {/* Onboarding Pipeline Summary */}
+        {pipeline && (
+          <div className="grid grid-cols-4 gap-3 mb-5">
+            {ONBOARDING_STATUSES.map((s) => {
+              const Icon = ONBOARDING_ICONS[s];
+              const count = pipeline[s] ?? 0;
+              const active = onboardingStatus === s;
+              return (
+                <button
+                  key={s}
+                  onClick={() => { setOnboardingStatus(active ? "" : s); setOffset(0); }}
+                  className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-left transition-all ${active ? ONBOARDING_ACTIVE[s] : ONBOARDING_COLORS[s]}`}
+                  data-testid={`pipeline-${s}`}
+                >
+                  <Icon size={16} className="flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold leading-none">{count}</p>
+                    <p className="text-[10px] font-medium uppercase tracking-wide mt-0.5 opacity-80">{ONBOARDING_LABELS[s]}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3 mb-6 items-center">
           <div className="relative flex-1 min-w-48">
@@ -105,7 +160,7 @@ export default function Suppliers() {
             {COUNTIES.map((c) => (
               <button
                 key={c}
-                onClick={() => setCounty(county === c ? "" : c)}
+                onClick={() => { setCounty(county === c ? "" : c); setOffset(0); }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${county === c ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:bg-muted"}`}
                 data-testid={`filter-county-${c.toLowerCase()}`}
               >
@@ -135,6 +190,7 @@ export default function Suppliers() {
             <button onClick={openModal} className="mt-3 text-sm text-primary hover:underline">Onboard the first supplier →</button>
           </div>
         ) : (
+          <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {supplierList.map((supplier: any) => (
               <Link key={supplier.id} href={`/suppliers/${supplier.id}`} className="group block bg-card border border-card-border rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5" data-testid={`card-supplier-${supplier.id}`}>
@@ -172,6 +228,26 @@ export default function Suppliers() {
               </Link>
             ))}
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-8">
+              <button
+                disabled={offset === 0}
+                onClick={() => setOffset(Math.max(0, offset - LIMIT))}
+                className="px-4 py-2 text-sm rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+              <button
+                disabled={currentPage >= totalPages}
+                onClick={() => setOffset(offset + LIMIT)}
+                className="px-4 py-2 text-sm rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
+          </>
         )}
       </div>
 

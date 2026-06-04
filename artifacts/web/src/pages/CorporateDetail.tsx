@@ -133,6 +133,7 @@ export default function CorporateDetail() {
       city: c?.city ?? "",
       paymentTerms: c?.paymentTerms ?? "net_30",
       accountManagerName: c?.accountManagerName ?? "",
+      creditLimit: c?.creditLimit != null ? String(c.creditLimit) : "",
     });
     setShowEdit(true);
   };
@@ -141,8 +142,8 @@ export default function CorporateDetail() {
   const invoiceParams = { corporate_id: id };
   const { data: quotesData, isLoading: quotesLoading } = useListQuotes(quoteParams, { query: { enabled: !!id, queryKey: getListQuotesQueryKey(quoteParams) } });
   const { data: invoicesData, isLoading: invoicesLoading } = useListInvoices(invoiceParams, { query: { enabled: !!id, queryKey: getListInvoicesQueryKey(invoiceParams) } });
-  const quoteList = (quotesData as any[]) ?? [];
-  const invoiceList = (invoicesData as any[]) ?? [];
+  const quoteList = (quotesData as any)?.items ?? (Array.isArray(quotesData) ? quotesData : []);
+  const invoiceList = (invoicesData as any)?.items ?? (Array.isArray(invoicesData) ? invoicesData : []);
 
   const spendData = (d?.spend_by_month ?? []).map((r: { month: string; spend: number }) => ({
     month: MONTH_LABELS[r.month?.split("-")[1]] ?? r.month,
@@ -203,7 +204,7 @@ export default function CorporateDetail() {
                   <Pencil size={13} /> Edit
                 </Button>
                 <Link
-                  href={`/quotes/new?corporateId=${c.id}&corporateName=${encodeURIComponent(c.name)}`}
+                  href={`/quotes?corporateId=${c.id}&corporateName=${encodeURIComponent(c.name)}`}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
                   data-testid="button-new-quote"
                 >
@@ -244,18 +245,46 @@ export default function CorporateDetail() {
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            {[
-              { label: "Total Orders", value: String(d?.total_orders ?? 0) },
-              { label: "Active Orders", value: String(d?.active_orders ?? 0) },
-              { label: "Total Spend", value: formatKES(d?.total_spend ?? 0) },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-card border border-card-border rounded-xl p-4 shadow-sm">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
-                <p className="text-xl font-semibold text-foreground tabular-nums" data-testid={`stat-${label.toLowerCase().replace(/\s+/g, "-")}`}>{value}</p>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              {[
+                { label: "Total Orders", value: String(d?.total_orders ?? 0) },
+                { label: "Active Orders", value: String(d?.active_orders ?? 0) },
+                { label: "Total Spend", value: formatKES(d?.total_spend ?? 0) },
+              ].map(({ label, value }) => (
+                <div key={label} className="bg-card border border-card-border rounded-xl p-4 shadow-sm">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
+                  <p className="text-xl font-semibold text-foreground tabular-nums" data-testid={`stat-${label.toLowerCase().replace(/\s+/g, "-")}`}>{value}</p>
+                </div>
+              ))}
+            </div>
+            {c.creditLimit != null && (() => {
+              const limit = parseFloat(c.creditLimit);
+              const outstanding = invoiceList
+                .filter((inv: any) => inv.status === "sent" || inv.status === "overdue")
+                .reduce((sum: number, inv: any) => sum + parseFloat(inv.totalAmount ?? inv.total_amount ?? 0), 0);
+              const pct = limit > 0 ? Math.min((outstanding / limit) * 100, 100) : 0;
+              const overLimit = outstanding > limit;
+              return (
+                <div className="bg-card border border-card-border rounded-xl p-4 shadow-sm mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Credit Utilisation</p>
+                    <span className={`text-xs font-semibold ${overLimit ? "text-red-600" : "text-muted-foreground"}`}>
+                      {formatKES(outstanding)} / {formatKES(limit)}
+                      {overLimit && " — Over limit"}
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-2 rounded-full transition-all ${pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-400" : "bg-primary"}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1.5">{pct.toFixed(0)}% of {formatKES(limit)} credit limit used · outstanding unpaid invoices</p>
+                </div>
+              );
+            })()}
+          </>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -318,7 +347,7 @@ export default function CorporateDetail() {
               <FileText size={15} className="text-muted-foreground" />
               <p className="text-sm font-semibold text-foreground">Quotes</p>
             </div>
-            <Link href={`/quotes/new?corporateId=${c.id}&corporateName=${encodeURIComponent(c.name)}`} className="text-xs font-medium text-primary hover:underline" data-testid="link-new-quote-bottom">
+            <Link href={`/quotes?corporateId=${c.id}&corporateName=${encodeURIComponent(c.name)}`} className="text-xs font-medium text-primary hover:underline" data-testid="link-new-quote-bottom">
               + New Quote
             </Link>
           </div>
@@ -601,13 +630,28 @@ export default function CorporateDetail() {
                   <Input value={editForm.accountManagerName} onChange={e => setEditForm(f => ({ ...f, accountManagerName: e.target.value }))} placeholder="Jane Wambui" />
                 </div>
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Credit Limit (KES)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={editForm.creditLimit}
+                  onChange={e => setEditForm(f => ({ ...f, creditLimit: e.target.value }))}
+                  placeholder="e.g. 500000 — leave blank for no limit"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">Sets maximum outstanding invoice exposure. A utilisation bar will appear on this page.</p>
+              </div>
               {saveError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>}
             </div>
             <div className="sticky bottom-0 bg-card border-t border-border px-6 py-4 flex gap-3 justify-end rounded-b-xl">
               <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
               <Button
                 disabled={!editForm.name.trim() || saveCorporate.isPending}
-                onClick={() => saveCorporate.mutate(editForm)}
+                onClick={() => {
+                  const payload: Record<string, unknown> = { ...editForm };
+                  payload.creditLimit = editForm.creditLimit !== "" ? parseFloat(editForm.creditLimit) : null;
+                  saveCorporate.mutate(payload as any);
+                }}
               >
                 {saveCorporate.isPending ? "Saving…" : "Save Changes"}
               </Button>

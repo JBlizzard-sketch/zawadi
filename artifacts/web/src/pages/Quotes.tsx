@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { FileText, ChevronRight, Plus, Trash2, X, ChevronDown } from "lucide-react";
+import { FileText, ChevronRight, Plus, Trash2, X, ChevronDown, Package, Search } from "lucide-react";
 import {
   useListQuotes, getListQuotesQueryKey,
   useListCorporates, getListCorporatesQueryKey,
@@ -23,68 +23,161 @@ const QUOTE_STATUS_LABELS: Record<string, string> = {
 
 const VAT_RATE = 0.16;
 
-interface LineItem { productId: string; productName: string; unitPrice: number; quantity: number; }
+interface LineItem {
+  productId: string;
+  productName: string;
+  basePrice: number;
+  unitPrice: number;
+  bulkTiers: Array<{ min_qty: number; price_per_unit: number }>;
+  quantity: number;
+}
+
+function getEffectivePrice(
+  basePrice: number,
+  tiers: Array<{ min_qty: number; price_per_unit: number }>,
+  qty: number
+): number {
+  if (!tiers?.length) return basePrice;
+  const sorted = [...tiers].sort((a, b) => b.min_qty - a.min_qty);
+  for (const tier of sorted) {
+    if (qty >= tier.min_qty) return tier.price_per_unit;
+  }
+  return basePrice;
+}
 
 export default function Quotes() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState(() => new URLSearchParams(window.location.search).get("status") ?? "");
+  const [search, setSearch] = useState("");
+  const [filterCorporateId, setFilterCorporateId] = useState("");
+  const [offset, setOffset] = useState(0);
+  const LIMIT = 20;
 
   const [showModal, setShowModal] = useState(false);
   const [modalCorporateId, setModalCorporateId] = useState("");
   const [modalNotes, setModalNotes] = useState("");
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ productId: "", productName: "", unitPrice: 0, quantity: 1 }]);
+  const [modalValidUntil, setModalValidUntil] = useState(() => {
+    const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    return d.toISOString().slice(0, 10);
+  });
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ productId: "", productName: "", basePrice: 0, unitPrice: 0, bulkTiers: [], quantity: 1 }]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [hamperLabel, setHamperLabel] = useState("");
 
-  const params = { status: status || undefined };
-  const { data: quotes, isLoading } = useListQuotes(params, { query: { queryKey: getListQuotesQueryKey(params) } });
-  const quoteList = (quotes as any[]) ?? [];
+  const params = { status: status || undefined, search: search || undefined, corporate_id: filterCorporateId || undefined, limit: LIMIT, offset };
+  const { data: quotes, isLoading } = useListQuotes(params as any, { query: { queryKey: getListQuotesQueryKey(params as any) } });
+  const quoteList = (quotes as any)?.items ?? [];
+  const total: number = (quotes as any)?.total ?? 0;
+  const totalPages = Math.ceil(total / LIMIT);
+  const currentPage = Math.floor(offset / LIMIT) + 1;
 
-  const { data: corporates } = useListCorporates(undefined, { query: { queryKey: getListCorporatesQueryKey(), enabled: showModal } });
+  const { data: corporates } = useListCorporates(undefined, { query: { queryKey: getListCorporatesQueryKey() } });
   const { data: productsData } = useListProducts({ limit: 50, offset: 0 }, { query: { queryKey: getListProductsQueryKey({ limit: 50, offset: 0 }), enabled: showModal } });
   const createQuote = useCreateQuote();
 
   const corporateList = (corporates as any[]) ?? [];
   const productList = (productsData as any)?.items ?? [];
 
-  // Auto-open modal pre-filled from URL params (e.g. from CorporateDetail)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const corpId = params.get("corporateId");
-    if (corpId) {
-      setModalCorporateId(corpId);
-      setModalNotes("");
-      setLineItems([{ productId: "", productName: "", unitPrice: 0, quantity: 1 }]);
-      setSubmitError("");
-      setShowModal(true);
-      // Clean URL without reloading
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-  }, []);
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-  const openModal = () => {
+  const resetModal = () => {
+    const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    setModalValidUntil(d.toISOString().slice(0, 10));
     setModalCorporateId("");
     setModalNotes("");
-    setLineItems([{ productId: "", productName: "", unitPrice: 0, quantity: 1 }]);
+    setLineItems([{ productId: "", productName: "", basePrice: 0, unitPrice: 0, bulkTiers: [], quantity: 1 }]);
     setSubmitError("");
+    setHamperLabel("");
+  };
+
+  const openModal = () => {
+    resetModal();
     setShowModal(true);
   };
 
+  // Auto-open modal pre-filled from URL params (?corporateId= or ?hamperId=)
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const corpId = sp.get("corporateId");
+    const hamperId = sp.get("hamperId");
+
+    if (corpId) {
+      const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      setModalValidUntil(d.toISOString().slice(0, 10));
+      setModalCorporateId(corpId);
+      setLineItems([{ productId: "", productName: "", basePrice: 0, unitPrice: 0, bulkTiers: [], quantity: 1 }]);
+      setSubmitError("");
+      setShowModal(true);
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (hamperId) {
+      fetch(`${BASE}/api/hampers/${hamperId}`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data?.id) return;
+          const items: LineItem[] = (data.items ?? []).map((item: any) => ({
+            productId: item.productId,
+            productName: item.product?.name ?? "Product",
+            basePrice: parseFloat(item.product?.unitPrice ?? item.unitPrice ?? "0"),
+            unitPrice: parseFloat(item.unitPrice ?? item.product?.unitPrice ?? "0"),
+            bulkTiers: item.product?.bulkTiers ?? [],
+            quantity: item.quantity ?? 1,
+          }));
+          if (items.length > 0) setLineItems(items);
+          setHamperLabel(data.name ?? "Saved Hamper");
+          setShowModal(true);
+        });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
+    const productId = sp.get("product");
+    if (productId) {
+      fetch(`${BASE}/api/products/${productId}`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data?.id) return;
+          setLineItems([{
+            productId: data.id,
+            productName: data.name ?? "Product",
+            basePrice: parseFloat(data.unitPrice ?? "0"),
+            unitPrice: parseFloat(data.unitPrice ?? "0"),
+            bulkTiers: data.bulkTiers ?? [],
+            quantity: 1,
+          }]);
+          const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+          setModalValidUntil(d.toISOString().slice(0, 10));
+          setSubmitError("");
+          setShowModal(true);
+        });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const setLineProduct = (index: number, productId: string) => {
     const product = productList.find((p: any) => p.id === productId);
+    const basePrice = parseFloat(product?.unitPrice ?? "0");
+    const bulkTiers: Array<{ min_qty: number; price_per_unit: number }> = product?.bulkTiers ?? [];
+    const qty = lineItems[index]?.quantity ?? 1;
+    const unitPrice = getEffectivePrice(basePrice, bulkTiers, qty);
     setLineItems((prev) => prev.map((item, i) =>
       i === index
-        ? { ...item, productId, productName: product?.name ?? "", unitPrice: parseFloat(product?.unitPrice ?? "0") }
+        ? { ...item, productId, productName: product?.name ?? "", basePrice, bulkTiers, unitPrice }
         : item
     ));
   };
 
   const setLineQty = (index: number, qty: number) => {
-    setLineItems((prev) => prev.map((item, i) => i === index ? { ...item, quantity: Math.max(1, qty) } : item));
+    setLineItems((prev) => prev.map((item, i) => {
+      if (i !== index) return item;
+      const newQty = Math.max(1, qty);
+      const unitPrice = getEffectivePrice(item.basePrice, item.bulkTiers, newQty);
+      return { ...item, quantity: newQty, unitPrice };
+    }));
   };
 
-  const addLine = () => setLineItems((prev) => [...prev, { productId: "", productName: "", unitPrice: 0, quantity: 1 }]);
+  const addLine = () => setLineItems((prev) => [...prev, { productId: "", productName: "", basePrice: 0, unitPrice: 0, bulkTiers: [], quantity: 1 }]);
   const removeLine = (index: number) => setLineItems((prev) => prev.filter((_, i) => i !== index));
 
   const validLines = lineItems.filter((l) => l.productId);
@@ -103,6 +196,7 @@ export default function Quotes() {
           corporate_id: modalCorporateId,
           items: validLines.map((l) => ({ product_id: l.productId, quantity: l.quantity })),
           notes: modalNotes || undefined,
+          valid_until: modalValidUntil || undefined,
         } as any,
       },
       {
@@ -126,11 +220,40 @@ export default function Quotes() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-serif font-semibold text-foreground">Quotes</h1>
-            <p className="text-sm text-muted-foreground mt-1">{quoteList.length} quote{quoteList.length !== 1 ? "s" : ""}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {isLoading ? "Loading…" : `${total} quote${total !== 1 ? "s" : ""}`}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Select value={status} onValueChange={(v) => setStatus(v === "all" ? "" : v)}>
-              <SelectTrigger className="w-40 h-9 text-sm" data-testid="select-quote-status">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-2.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setOffset(0); }}
+                placeholder="Reference or client…"
+                className="h-9 pl-8 pr-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 w-48"
+                data-testid="input-search"
+              />
+              {search && (
+                <button onClick={() => { setSearch(""); setOffset(0); }} className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground">
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            <Select value={filterCorporateId} onValueChange={(v) => { setFilterCorporateId(v === "all" ? "" : v); setOffset(0); }}>
+              <SelectTrigger className="w-44 h-9 text-sm" data-testid="select-corporate-filter">
+                <SelectValue placeholder="All clients" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All clients</SelectItem>
+                {corporateList.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={status} onValueChange={(v) => { setStatus(v === "all" ? "" : v); setOffset(0); }}>
+              <SelectTrigger className="w-38 h-9 text-sm" data-testid="select-quote-status">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
@@ -174,10 +297,16 @@ export default function Quotes() {
                 <tr>
                   <td colSpan={6} className="px-5 py-16 text-center">
                     <FileText size={32} className="mx-auto text-muted-foreground/30 mb-3" />
-                    <p className="text-sm text-muted-foreground mb-3">No quotes found</p>
-                    <Button size="sm" variant="outline" onClick={openModal} className="gap-1.5">
-                      <Plus size={13} /> Create your first quote
-                    </Button>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {search ? `No quotes matching "${search}"` : "No quotes found"}
+                    </p>
+                    {search ? (
+                      <button onClick={() => setSearch("")} className="text-xs text-primary hover:underline">Clear search</button>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={openModal} className="gap-1.5">
+                        <Plus size={13} /> Create your first quote
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -205,6 +334,26 @@ export default function Quotes() {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-5">
+            <button
+              disabled={offset === 0}
+              onClick={() => setOffset(Math.max(0, offset - LIMIT))}
+              className="px-4 py-2 text-sm rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+            <button
+              disabled={currentPage >= totalPages}
+              onClick={() => setOffset(offset + LIMIT)}
+              className="px-4 py-2 text-sm rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       {/* New Quote Modal */}
@@ -213,7 +362,14 @@ export default function Quotes() {
           <div className="bg-card border border-card-border rounded-2xl shadow-xl w-full max-w-xl max-h-[80vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
-              <h2 className="text-base font-serif font-semibold text-foreground">New Quote</h2>
+              <div>
+                <h2 className="text-base font-serif font-semibold text-foreground">New Quote</h2>
+                {hamperLabel && (
+                  <p className="text-xs text-primary/80 flex items-center gap-1 mt-0.5">
+                    <Package size={11} /> Pre-filled from "{hamperLabel}"
+                  </p>
+                )}
+              </div>
               <button onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground transition-colors" data-testid="button-close-modal">
                 <X size={18} />
               </button>
@@ -221,22 +377,35 @@ export default function Quotes() {
 
             {/* Scrollable body */}
             <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
-              {/* Corporate */}
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Corporate Account <span className="text-destructive">*</span></label>
-                <div className="relative">
-                  <select
-                    value={modalCorporateId}
-                    onChange={(e) => { setModalCorporateId(e.target.value); setSubmitError(""); }}
-                    className="w-full h-9 rounded-lg border border-input bg-background px-3 pr-8 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    data-testid="select-corporate"
-                  >
-                    <option value="">— Select corporate —</option>
-                    {corporateList.map((c: any) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={14} className="absolute right-2.5 top-2.5 text-muted-foreground pointer-events-none" />
+              {/* Corporate + Valid Until row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Corporate Account <span className="text-destructive">*</span></label>
+                  <div className="relative">
+                    <select
+                      value={modalCorporateId}
+                      onChange={(e) => { setModalCorporateId(e.target.value); setSubmitError(""); }}
+                      className="w-full h-9 rounded-lg border border-input bg-background px-3 pr-8 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      data-testid="select-corporate"
+                    >
+                      <option value="">— Select corporate —</option>
+                      {corporateList.map((c: any) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-2.5 top-2.5 text-muted-foreground pointer-events-none" />
+                  </div>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Valid Until</label>
+                  <input
+                    type="date"
+                    value={modalValidUntil}
+                    onChange={(e) => setModalValidUntil(e.target.value)}
+                    min={new Date().toISOString().slice(0, 10)}
+                    className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    data-testid="input-valid-until"
+                  />
                 </div>
               </div>
 
@@ -249,38 +418,50 @@ export default function Quotes() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {lineItems.map((line, i) => (
-                    <div key={i} className="flex gap-2 items-center" data-testid={`line-item-${i}`}>
-                      <div className="relative flex-1">
-                        <select
-                          value={line.productId}
-                          onChange={(e) => setLineProduct(i, e.target.value)}
-                          className="w-full h-9 rounded-lg border border-input bg-background px-3 pr-8 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-                          data-testid={`select-product-${i}`}
-                        >
-                          <option value="">— Product —</option>
-                          {productList.map((p: any) => (
-                            <option key={p.id} value={p.id}>{p.name} ({formatKES(p.unitPrice)})</option>
-                          ))}
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2.5 top-2.5 text-muted-foreground pointer-events-none" />
+                  {lineItems.map((line, i) => {
+                    const hasDiscount = line.productId && line.unitPrice < line.basePrice;
+                    return (
+                    <div key={i} data-testid={`line-item-${i}`}>
+                      <div className="flex gap-2 items-center">
+                        <div className="relative flex-1">
+                          <select
+                            value={line.productId}
+                            onChange={(e) => setLineProduct(i, e.target.value)}
+                            className="w-full h-9 rounded-lg border border-input bg-background px-3 pr-8 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            data-testid={`select-product-${i}`}
+                          >
+                            <option value="">— Product —</option>
+                            {productList.map((p: any) => (
+                              <option key={p.id} value={p.id}>{p.name} ({formatKES(p.unitPrice)})</option>
+                            ))}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-2.5 top-2.5 text-muted-foreground pointer-events-none" />
+                        </div>
+                        <input
+                          type="number"
+                          min={1}
+                          value={line.quantity}
+                          onChange={(e) => setLineQty(i, parseInt(e.target.value) || 1)}
+                          className="w-20 h-9 rounded-lg border border-input bg-background px-3 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          data-testid={`input-qty-${i}`}
+                          placeholder="Qty"
+                        />
+                        {lineItems.length > 1 && (
+                          <button onClick={() => removeLine(i)} className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0" data-testid={`button-remove-line-${i}`}>
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
-                      <input
-                        type="number"
-                        min={1}
-                        value={line.quantity}
-                        onChange={(e) => setLineQty(i, parseInt(e.target.value) || 1)}
-                        className="w-20 h-9 rounded-lg border border-input bg-background px-3 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        data-testid={`input-qty-${i}`}
-                        placeholder="Qty"
-                      />
-                      {lineItems.length > 1 && (
-                        <button onClick={() => removeLine(i)} className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0" data-testid={`button-remove-line-${i}`}>
-                          <Trash2 size={14} />
-                        </button>
+                      {hasDiscount && (
+                        <p className="text-[10px] text-green-700 font-medium mt-1 ml-1 flex items-center gap-1">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />
+                          Volume price: {formatKES(line.unitPrice)}/unit
+                          <span className="text-muted-foreground line-through ml-1">{formatKES(line.basePrice)}</span>
+                        </p>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

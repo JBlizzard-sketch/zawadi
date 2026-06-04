@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { ArrowUpRight, TrendingUp, Package, Building2, Layers, ShoppingCart, Clock, AlertTriangle, Leaf, MapPin } from "lucide-react";
+import { ArrowUpRight, TrendingUp, Package, Building2, Layers, ShoppingCart, Clock, AlertTriangle, Leaf, MapPin, FileText, Receipt, Activity, Truck, CalendarClock, Gift, Plus } from "lucide-react";
 import { useGetDashboardStats, getGetDashboardStatsQueryKey, useGetRecentOrders, getGetRecentOrdersQueryKey, useGetTopProducts, getGetTopProductsQueryKey } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -42,6 +42,18 @@ export default function Dashboard() {
     staleTime: 60_000,
   });
 
+  const { data: activity } = useQuery<any[]>({
+    queryKey: ["dashboard-activity"],
+    queryFn: () => fetch(`${BASE}/api/dashboard/activity`).then((r) => r.json()),
+    staleTime: 30_000,
+  });
+
+  const { data: upcomingDeliveries, isLoading: deliveriesLoading } = useQuery<any[]>({
+    queryKey: ["dashboard-upcoming-deliveries"],
+    queryFn: () => fetch(`${BASE}/api/dashboard/upcoming-deliveries`).then((r) => r.json()),
+    staleTime: 60_000,
+  });
+
   const revenueData = (stats?.revenue_by_month ?? []).map((r: { month: string; revenue: number }) => ({
     month: MONTH_LABELS[r.month?.split("-")[1]] ?? r.month,
     revenue: r.revenue,
@@ -50,7 +62,8 @@ export default function Dashboard() {
   const hasAlerts = alerts && (
     alerts.overdue_invoices?.count > 0 ||
     alerts.expiring_quotes?.count > 0 ||
-    alerts.stuck_pending_orders?.count > 0
+    alerts.stuck_pending_orders?.count > 0 ||
+    alerts.low_stock_products?.count > 0
   );
 
   return (
@@ -60,6 +73,29 @@ export default function Dashboard() {
         <div className="mb-6">
           <h1 className="text-2xl font-serif font-semibold text-foreground">Overview</h1>
           <p className="text-sm text-muted-foreground mt-1">Live platform metrics and recent activity</p>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: "New Quote", icon: FileText, href: "/quotes", color: "text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100" },
+            { label: "New Order", icon: ShoppingCart, href: "/orders", color: "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" },
+            { label: "Hamper Builder", icon: Gift, href: "/hamper-builder", color: "text-primary bg-primary/5 border-primary/20 hover:bg-primary/10" },
+            { label: "New Corporate", icon: Building2, href: "/corporates", color: "text-violet-700 bg-violet-50 border-violet-200 hover:bg-violet-100" },
+          ].map(({ label, icon: Icon, href, color }) => (
+            <Link
+              key={label}
+              href={href}
+              className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${color}`}
+              data-testid={`quick-action-${label.toLowerCase().replace(/\s+/g, "-")}`}
+            >
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/60 flex-shrink-0">
+                <Icon size={14} />
+              </div>
+              <span>{label}</span>
+              <Plus size={12} className="ml-auto opacity-60" />
+            </Link>
+          ))}
         </div>
 
         {/* Alerts Strip */}
@@ -96,6 +132,16 @@ export default function Dashboard() {
                   data-testid="alert-stuck-orders"
                 >
                   <span className="font-bold">{alerts.stuck_pending_orders.count}</span> pending order{alerts.stuck_pending_orders.count !== 1 ? "s" : ""} stalled &gt;7 days
+                </Link>
+              )}
+              {alerts.low_stock_products?.count > 0 && (
+                <Link
+                  href="/catalogue?low_stock=true"
+                  className="inline-flex items-center gap-1.5 bg-amber-100 border border-amber-200 text-amber-800 text-xs font-medium px-3 py-1.5 rounded-full hover:bg-amber-200 transition-colors"
+                  data-testid="alert-low-stock"
+                >
+                  <Package size={11} />
+                  <span className="font-bold">{alerts.low_stock_products.count}</span> product{alerts.low_stock_products.count !== 1 ? "s" : ""} low/out of stock
                 </Link>
               )}
             </div>
@@ -241,6 +287,108 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+        {/* Activity Feed */}
+        <div className="mb-6 bg-card border border-card-border rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-card-border">
+            <div className="flex items-center gap-2">
+              <Activity size={14} className="text-primary" />
+              <p className="text-sm font-semibold text-foreground">Recent Activity</p>
+            </div>
+          </div>
+          {!activity || activity.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10">
+              <Clock size={24} className="text-muted-foreground/30 mb-2" />
+              <p className="text-sm text-muted-foreground">No recent activity</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {activity.map((event: any) => {
+                const TypeIcon = event.type === "order" ? ShoppingCart : event.type === "quote" ? FileText : Receipt;
+                const iconBg = event.type === "order" ? "bg-blue-100 text-blue-600" : event.type === "quote" ? "bg-amber-100 text-amber-600" : "bg-green-100 text-green-600";
+                return (
+                  <Link
+                    key={`${event.type}-${event.id}`}
+                    href={event.href}
+                    className="flex items-center gap-4 px-5 py-3 hover:bg-muted/40 transition-colors"
+                    data-testid={`activity-row-${event.type}-${event.id}`}
+                  >
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+                      <TypeIcon size={12} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground truncate">
+                        <span className="font-medium">{event.ref}</span>
+                        <span className="text-muted-foreground"> · {event.label}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{formatDate(event.createdAt)}</p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className="text-xs text-muted-foreground capitalize">{event.status}</span>
+                      {event.amount && <span className="text-sm font-semibold text-foreground tabular-nums">{formatKES(Number(event.amount))}</span>}
+                      <ArrowUpRight size={13} className="text-muted-foreground/40" />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Upcoming Deliveries */}
+        <div className="mb-6 bg-card border border-card-border rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-card-border">
+            <div className="flex items-center gap-2">
+              <Truck size={14} className="text-primary" />
+              <p className="text-sm font-semibold text-foreground">Upcoming Deliveries</p>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Next 30 days</span>
+            </div>
+            <Link href="/orders" className="text-xs text-primary font-medium flex items-center gap-1 hover:underline" data-testid="link-all-orders-deliveries">
+              View all <ArrowUpRight size={12} />
+            </Link>
+          </div>
+          {deliveriesLoading ? (
+            <div className="p-5 space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-11" />)}</div>
+          ) : !upcomingDeliveries || upcomingDeliveries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <CalendarClock size={28} className="text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground">No deliveries scheduled in the next 30 days</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Set a delivery date on an order to see it here</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {upcomingDeliveries.map((order: any) => {
+                const daysUntil = Math.ceil((new Date(order.deliveryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                const urgency = daysUntil <= 3 ? "text-red-600 bg-red-50 border-red-200" : daysUntil <= 7 ? "text-amber-700 bg-amber-50 border-amber-200" : "text-green-700 bg-green-50 border-green-200";
+                return (
+                  <Link
+                    key={order.id}
+                    href={`/orders/${order.id}`}
+                    className="flex items-center gap-4 px-5 py-3 hover:bg-muted/40 transition-colors"
+                    data-testid={`delivery-row-${order.id}`}
+                  >
+                    <div className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded border flex-shrink-0 ${urgency}`}>
+                      <CalendarClock size={10} />
+                      {daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : `${daysUntil}d`}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">{order.reference}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {order.corporateName ?? "—"}
+                        {order.deliveryAddress ? ` · ${order.deliveryAddress}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <StatusBadge label={ORDER_STATUS_LABELS[order.status] ?? order.status} colorClass={ORDER_STATUS_COLORS[order.status] ?? ""} />
+                      <span className="text-sm font-semibold text-foreground tabular-nums">{formatKES(order.total)}</span>
+                      <ArrowUpRight size={13} className="text-muted-foreground/40" />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* ESG Impact Panel */}
         <div className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-800 rounded-xl p-6 text-white shadow-sm">
           <div className="flex items-center gap-2 mb-5">

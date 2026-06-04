@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Upload, Users, Trash2, UserPlus, FileDown } from "lucide-react";
+import { ArrowLeft, Upload, Users, Trash2, UserPlus, FileDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useListRecipients, getListRecipientsQueryKey, useBulkCreateRecipients, useDeleteRecipient } from "@workspace/api-client-react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,6 +29,7 @@ export default function Recipients() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [template, setTemplate] = useState("Dear {{name}},\n\nThank you for your dedication to our team. This gift is a token of our appreciation.\n\nWarm regards,\nThe Management");
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [csvText, setCsvText] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{ created: number; failed: number } | null>(null);
@@ -115,10 +116,12 @@ export default function Recipients() {
     });
   };
 
+  const safeIndex = recipientList.length > 0 ? Math.min(previewIndex, recipientList.length - 1) : 0;
+  const previewRecipient = recipientList[safeIndex];
   const previewMessage = template
-    .replace("{{name}}", "Wanjiru Njoroge")
-    .replace("{{title}}", "Senior Analyst")
-    .replace("{{department}}", "Finance");
+    .replace(/\{\{name\}\}/g, previewRecipient?.name ?? "Recipient Name")
+    .replace(/\{\{title\}\}/g, previewRecipient?.title ?? "Job Title")
+    .replace(/\{\{department\}\}/g, previewRecipient?.department ?? "Department");
 
   return (
     <Layout>
@@ -238,7 +241,37 @@ export default function Recipients() {
               className="text-xs h-28 resize-none mb-3"
             />
             <div className="bg-amber-50/60 border border-amber-100 rounded-lg p-3">
-              <p className="text-[10px] font-semibold text-amber-800 uppercase tracking-wide mb-1.5">Preview</p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[10px] font-semibold text-amber-800 uppercase tracking-wide">
+                  Preview
+                  {recipientList.length > 0 && (
+                    <span className="ml-1.5 normal-case font-normal text-amber-600">
+                      — {previewRecipient?.name ?? ""}
+                    </span>
+                  )}
+                </p>
+                {recipientList.length > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPreviewIndex(i => Math.max(0, i - 1))}
+                      disabled={safeIndex === 0}
+                      className="p-0.5 text-amber-600 hover:text-amber-800 disabled:opacity-30 transition-colors"
+                      data-testid="button-preview-prev"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="text-[10px] text-amber-700 tabular-nums">{safeIndex + 1}/{recipientList.length}</span>
+                    <button
+                      onClick={() => setPreviewIndex(i => Math.min(recipientList.length - 1, i + 1))}
+                      disabled={safeIndex === recipientList.length - 1}
+                      className="p-0.5 text-amber-600 hover:text-amber-800 disabled:opacity-30 transition-colors"
+                      data-testid="button-preview-next"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
               <p className="text-xs text-stone-700 whitespace-pre-wrap leading-relaxed">{previewMessage}</p>
             </div>
           </div>

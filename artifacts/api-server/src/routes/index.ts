@@ -14,6 +14,7 @@ import invoicesRouter from "./invoices";
 import dashboardRouter from "./dashboard";
 import searchRouter from "./search";
 import settingsRouter from "./settings";
+import purchaseOrdersRouter from "./purchase-orders";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(invoicesRouter);
 router.use(dashboardRouter);
 router.use(searchRouter);
 router.use(settingsRouter);
+router.use(purchaseOrdersRouter);
 
 export default router;

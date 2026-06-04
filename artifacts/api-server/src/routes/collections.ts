@@ -116,4 +116,16 @@ router.put("/collections/:id", async (req, res) => {
   }
 });
 
+router.delete("/collections/:id", async (req, res) => {
+  try {
+    await db.delete(collectionProductsTable).where(eq(collectionProductsTable.collectionId, req.params.id));
+    const [deleted] = await db.delete(collectionsTable).where(eq(collectionsTable.id, req.params.id)).returning();
+    if (!deleted) return res.status(404).json({ error: "Collection not found" });
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to delete collection", details: String(err) });
+  }
+});
+
 export default router;

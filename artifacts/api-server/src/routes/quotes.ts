@@ -1,10 +1,18 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { quotesTable, productsTable, ordersTable, orderItemsTable, corporatesTable } from "@workspace/db/schema";
-import { eq, and, inArray, lt, sql } from "drizzle-orm";
-import { randomUUID } from "crypto";
+import { eq, and, inArray, lt, sql, desc } from "drizzle-orm";
 
 const VAT_RATE = 0.16; // Kenya VAT 16%
+
+function calcTotals(subtotal: number, discountPct: number) {
+  const pct = Math.max(0, Math.min(100, discountPct));
+  const discountAmount = subtotal * pct / 100;
+  const taxable = subtotal - discountAmount;
+  const vat = taxable * VAT_RATE;
+  const total = taxable + vat;
+  return { discountAmount, vat, total };
+}
 
 const router = Router();
 
@@ -18,13 +26,16 @@ router.get("/quotes", async (req, res) => {
         lt(quotesTable.validUntil, sql`now()`)
       ));
 
-    const { corporate_id, status } = req.query as Record<string, string>;
+    const { corporate_id, status, search, limit: limitStr, offset: offsetStr } = req.query as Record<string, string>;
+    const limit = Math.min(parseInt(limitStr ?? "50") || 50, 200);
+    const offset = parseInt(offsetStr ?? "0") || 0;
+
     const conditions = [];
     if (corporate_id) conditions.push(eq(quotesTable.corporateId, corporate_id));
     if (status) conditions.push(eq(quotesTable.status, status as any));
     const quotes = await db.select().from(quotesTable)
       .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(quotesTable.createdAt);
+      .orderBy(desc(quotesTable.createdAt));
 
     // Enrich with corporate names
     const corpIds = [...new Set(quotes.map((q) => q.corporateId).filter(Boolean))] as string[];
@@ -33,7 +44,19 @@ router.get("/quotes", async (req, res) => {
       : [];
     const corpMap = Object.fromEntries(corps.map((c) => [c.id, c.name]));
 
-    res.json(quotes.map((q) => ({ ...q, corporate_name: q.corporateId ? (corpMap[q.corporateId] ?? null) : null })));
+    let enriched = quotes.map((q) => ({ ...q, corporate_name: q.corporateId ? (corpMap[q.corporateId] ?? null) : null }));
+
+    if (search) {
+      const q = search.toLowerCase();
+      enriched = enriched.filter((r) =>
+        (r.reference ?? "").toLowerCase().includes(q) ||
+        (r.corporate_name ?? "").toLowerCase().includes(q)
+      );
+    }
+
+    const total = enriched.length;
+    const items = enriched.slice(offset, offset + limit);
+    res.json({ items, total });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch quotes" });
@@ -60,7 +83,7 @@ router.get("/quotes/:id", async (req, res) => {
 
 router.post("/quotes", async (req, res) => {
   try {
-    const { corporate_id, items: rawItems = [], notes } = req.body;
+    const { corporate_id, items: rawItems = [], notes, valid_until, discount_pct } = req.body;
 
     const quoteItems = [];
     let subtotal = 0;
@@ -89,10 +112,9 @@ router.post("/quotes", async (req, res) => {
       });
     }
 
-    const vat = subtotal * VAT_RATE;
-    const total = subtotal + vat;
-    const validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
+    const discountPct = parseFloat(discount_pct ?? "0") || 0;
+    const { discountAmount, vat, total } = calcTotals(subtotal, discountPct);
+    const validUntil = valid_until ? new Date(valid_until) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const reference = `QT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
 
     const [quote] = await db.insert(quotesTable).values({
@@ -101,6 +123,8 @@ router.post("/quotes", async (req, res) => {
       status: "draft",
       items: quoteItems as any,
       subtotal: subtotal.toFixed(2),
+      discountPct: discountPct.toFixed(2),
+      discountAmount: discountAmount.toFixed(2),
       vat: vat.toFixed(2),
       total: total.toFixed(2),
       notes: notes ?? null,
@@ -116,10 +140,25 @@ router.post("/quotes", async (req, res) => {
 
 router.put("/quotes/:id", async (req, res) => {
   try {
-    const { status, notes } = req.body;
+    const { status, notes, discount_pct } = req.body;
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (status) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes;
+
+    if (discount_pct !== undefined) {
+      // Recalculate totals with new discount
+      const [existing] = await db.select().from(quotesTable).where(eq(quotesTable.id, req.params.id));
+      if (existing) {
+        const subtotal = parseFloat(existing.subtotal as string);
+        const discountPct = parseFloat(discount_pct ?? "0") || 0;
+        const { discountAmount, vat, total } = calcTotals(subtotal, discountPct);
+        updateData.discountPct = discountPct.toFixed(2);
+        updateData.discountAmount = discountAmount.toFixed(2);
+        updateData.vat = vat.toFixed(2);
+        updateData.total = total.toFixed(2);
+      }
+    }
+
     const [updated] = await db.update(quotesTable)
       .set(updateData)
       .where(eq(quotesTable.id, req.params.id))
@@ -138,6 +177,7 @@ router.post("/quotes/:id/convert", async (req, res) => {
     if (!quote) return res.status(404).json({ error: "Quote not found" });
     if (quote.status === "expired") return res.status(400).json({ error: "Quote has expired" });
 
+    const { delivery_address, delivery_date } = req.body ?? {};
     const reference = `ZWD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
     const items = (quote.items as any[]) ?? [];
 
@@ -146,11 +186,15 @@ router.post("/quotes/:id/convert", async (req, res) => {
       corporateId: quote.corporateId!,
       status: "pending",
       subtotal: quote.subtotal,
+      discountPct: quote.discountPct,
+      discountAmount: quote.discountAmount,
       vat: quote.vat,
       total: quote.total,
       notes: quote.notes,
       recipientCount: 0,
       quoteId: quote.id,
+      deliveryAddress: delivery_address ?? null,
+      deliveryDate: delivery_date ? new Date(delivery_date) : null,
     }).returning();
 
     if (items.length) {

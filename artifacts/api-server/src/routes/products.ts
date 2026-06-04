@@ -13,16 +13,18 @@ const router = Router();
 
 router.get("/products", async (req, res) => {
   try {
-    const { category_id, supplier_id, min_price, max_price, search, is_featured, limit = "24", offset = "0" } = req.query as Record<string, string>;
+    const { category_id, supplier_id, min_price, max_price, search, is_featured, low_stock, show_inactive, occasion, limit = "24", offset = "0" } = req.query as Record<string, string>;
 
     const conditions = [];
-    conditions.push(eq(productsTable.isActive, true));
+    if (show_inactive !== "true") conditions.push(eq(productsTable.isActive, true));
     if (category_id) conditions.push(eq(productsTable.categoryId, category_id));
     if (supplier_id) conditions.push(eq(productsTable.supplierId, supplier_id));
     if (min_price) conditions.push(gte(productsTable.unitPrice, min_price));
     if (max_price) conditions.push(lte(productsTable.unitPrice, max_price));
     if (search) conditions.push(ilike(productsTable.name, `%${search}%`));
     if (is_featured === "true") conditions.push(eq(productsTable.isFeatured, true));
+    if (low_stock === "true") conditions.push(sql`stock_qty is not null and stock_qty < moq`);
+    if (occasion) conditions.push(sql`occasion_tags @> ARRAY[${occasion}]::text[]`);
 
     const [items, [{ count }]] = await Promise.all([
       db.select().from(productsTable)
@@ -89,6 +91,27 @@ router.put("/products/:id", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(400).json({ error: "Failed to update product", details: String(err) });
+  }
+});
+
+router.patch("/products/:id/stock", async (req, res) => {
+  try {
+    const { adjustment, setTo } = req.body;
+    const hasAdjust = typeof adjustment === "number";
+    const hasSetTo = typeof setTo === "number";
+    if (!hasAdjust && !hasSetTo) return res.status(400).json({ error: "adjustment or setTo (number) is required" });
+    const [existing] = await db.select({ stockQty: productsTable.stockQty }).from(productsTable).where(eq(productsTable.id, req.params.id));
+    if (!existing) return res.status(404).json({ error: "Product not found" });
+    const current = existing.stockQty ?? 0;
+    const next = hasSetTo ? Math.max(0, setTo) : Math.max(0, current + adjustment);
+    const [updated] = await db.update(productsTable)
+      .set({ stockQty: next, updatedAt: new Date() })
+      .where(eq(productsTable.id, req.params.id))
+      .returning();
+    res.json(updated);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to adjust stock" });
   }
 });
 

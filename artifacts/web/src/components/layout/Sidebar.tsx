@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Package, BookOpen, Gift, ShoppingCart,
-  FileText, Receipt, Building2, Layers, ChevronRight, BarChart3, Settings2,
+  FileText, Receipt, Building2, Layers, ChevronRight, BarChart3, Settings2, Tag, Archive, ClipboardList, Warehouse,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SearchCommand from "@/components/ui/SearchCommand";
@@ -9,13 +9,17 @@ import SearchCommand from "@/components/ui/SearchCommand";
 const NAV = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Catalogue", href: "/catalogue", icon: Package },
+  { label: "Categories", href: "/categories", icon: Tag },
   { label: "Collections", href: "/collections", icon: BookOpen },
   { label: "Hamper Builder", href: "/hamper-builder", icon: Gift },
+  { label: "Saved Hampers", href: "/hampers", icon: Archive },
   { label: "Quotes", href: "/quotes", icon: FileText },
   { label: "Orders", href: "/orders", icon: ShoppingCart },
   { label: "Invoices", href: "/invoices", icon: Receipt },
   { label: "Reports", href: "/reports", icon: BarChart3 },
+  { label: "Stock", href: "/stock", icon: Warehouse },
   { label: "Suppliers", href: "/suppliers", icon: Layers },
+  { label: "Purchase Orders", href: "/purchase-orders", icon: ClipboardList },
   { label: "Corporates", href: "/corporates", icon: Building2 },
   { label: "Settings", href: "/settings", icon: Settings2 },
 ];

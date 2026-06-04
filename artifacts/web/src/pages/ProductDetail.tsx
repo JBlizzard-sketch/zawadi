@@ -109,9 +109,12 @@ export default function ProductDetail() {
       unitPrice: p.unitPrice ?? "",
       moq: String(p.moq ?? 1),
       leadTimeDays: String(p.leadTimeDays ?? 7),
+      stockQty: p.stockQty != null ? String(p.stockQty) : "",
       origin: p.origin ?? "",
       description: p.description ?? "",
       isActive: String(p.isActive ?? true),
+      tags: (p.tags ?? []).join(", "),
+      occasionTags: (p.occasionTags ?? []).join(", "),
     });
     setTiers(
       (p.bulkTiers ?? []).map((t: any) => ({
@@ -133,13 +136,17 @@ export default function ProductDetail() {
       .map(t => ({ min_qty: parseInt(t.min_qty, 10), price_per_unit: parseFloat(t.price_per_unit) }))
       .sort((a, b) => a.min_qty - b.min_qty);
 
+    const splitTags = (s: string) => s.split(",").map(t => t.trim()).filter(Boolean);
     saveProduct.mutate({
       ...editForm,
       unitPrice: editForm.unitPrice,
       moq: parseInt(editForm.moq) || 1,
       leadTimeDays: parseInt(editForm.leadTimeDays) || 7,
+      stockQty: editForm.stockQty !== "" ? parseInt(editForm.stockQty) : null,
       isActive: editForm.isActive !== "false",
       bulkTiers: validTiers,
+      tags: splitTags(editForm.tags ?? ""),
+      occasionTags: splitTags(editForm.occasionTags ?? ""),
     });
   };
 
@@ -361,6 +368,31 @@ export default function ProductDetail() {
                   <p className="text-sm font-bold text-foreground">{p.origin}</p>
                 </div>
               </div>
+              {p.stockQty != null && (
+                <div className={`rounded-xl p-3 flex items-start gap-2 col-span-2 ${
+                  p.stockQty === 0 ? "bg-red-50" :
+                  p.stockQty < p.moq ? "bg-amber-50" :
+                  "bg-green-50"
+                }`}>
+                  <Package size={14} className={`mt-0.5 ${
+                    p.stockQty === 0 ? "text-red-600" :
+                    p.stockQty < p.moq ? "text-amber-600" :
+                    "text-green-700"
+                  }`} />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Stock</p>
+                    <p className={`text-sm font-bold ${
+                      p.stockQty === 0 ? "text-red-700" :
+                      p.stockQty < p.moq ? "text-amber-700" :
+                      "text-green-700"
+                    }`}>
+                      {p.stockQty === 0 ? "Out of stock" :
+                       p.stockQty < p.moq ? `Low stock — ${p.stockQty} units` :
+                       `${p.stockQty} units`}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bulk Pricing Tiers */}
@@ -426,7 +458,7 @@ export default function ProductDetail() {
                 size="lg"
                 variant="outline"
                 className="w-full gap-2 text-sm"
-                onClick={() => setLocation("/quotes")}
+                onClick={() => setLocation(`/quotes?product=${p.id}`)}
                 data-testid="button-request-quote"
               >
                 <ShoppingCart size={15} /> Request a Quote
@@ -483,11 +515,17 @@ export default function ProductDetail() {
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unit Price (KES) *</label>
                   <Input type="number" min="0" step="0.01" value={editForm.unitPrice} onChange={e => setEditForm(f => ({ ...f, unitPrice: e.target.value }))} placeholder="1500" />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Qty</label>
+                  <Input type="number" min="0" value={editForm.stockQty ?? ""} onChange={e => setEditForm(f => ({ ...f, stockQty: e.target.value }))} placeholder="Leave blank if untracked" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Min. Order (MOQ)</label>
                   <Input type="number" min="1" value={editForm.moq} onChange={e => setEditForm(f => ({ ...f, moq: e.target.value }))} placeholder="10" />
@@ -510,6 +548,29 @@ export default function ProductDetail() {
                   placeholder="Describe this product…"
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                 />
+              </div>
+
+              {/* Tags */}
+              <div className="pt-2 border-t border-border space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Product Tags</label>
+                  <input
+                    value={editForm.tags ?? ""}
+                    onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))}
+                    placeholder="handmade, artisan, eco-friendly (comma-separated)"
+                    className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Occasion Tags</label>
+                  <input
+                    value={editForm.occasionTags ?? ""}
+                    onChange={e => setEditForm(f => ({ ...f, occasionTags: e.target.value }))}
+                    placeholder="client_gifts, staff_appreciation, festive_hampers (comma-separated)"
+                    className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <p className="text-[10px] text-muted-foreground/60 mt-1">Use values: client_gifts · staff_appreciation · event_giveaways · festive_hampers · onboarding_kits</p>
+                </div>
               </div>
 
               {/* Bulk Pricing Tiers */}
