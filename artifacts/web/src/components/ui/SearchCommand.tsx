@@ -30,14 +30,17 @@ export default function SearchCommand() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [, setLocation] = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const close = useCallback(() => {
     setOpen(false);
     setQuery("");
     setResults(null);
+    setSelectedIndex(-1);
   }, []);
 
   const navigate = useCallback((path: string) => {
@@ -62,9 +65,10 @@ export default function SearchCommand() {
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (query.trim().length < 2) { setResults(null); setLoading(false); return; }
+    if (query.trim().length < 2) { setResults(null); setLoading(false); setSelectedIndex(-1); return; }
 
     setLoading(true);
+    setSelectedIndex(-1);
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`${BASE}/api/search?q=${encodeURIComponent(query.trim())}`);
@@ -77,6 +81,47 @@ export default function SearchCommand() {
       }
     }, 280);
   }, [query]);
+
+  const flatItems: Array<{ key: string; onClick: () => void }> = results
+    ? [
+        ...(results.orders ?? []).map((o: any) => ({ key: o.id, onClick: () => navigate(`/orders/${o.id}`) })),
+        ...(results.quotes ?? []).map((q: any) => ({ key: q.id, onClick: () => navigate(`/quotes/${q.id}`) })),
+        ...(results.corporates ?? []).map((c: any) => ({ key: c.id, onClick: () => navigate(`/corporates/${c.id}`) })),
+        ...(results.suppliers ?? []).map((s: any) => ({ key: s.id, onClick: () => navigate(`/suppliers/${s.id}`) })),
+        ...(results.products ?? []).map((p: any) => ({ key: p.id, onClick: () => navigate(`/catalogue/${p.id}`) })),
+      ]
+    : [];
+
+  const totalItems = flatItems.length;
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!totalItems) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIndex((i) => {
+        const next = (i + 1) % totalItems;
+        scrollResultIntoView(next);
+        return next;
+      });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((i) => {
+        const next = (i - 1 + totalItems) % totalItems;
+        scrollResultIntoView(next);
+        return next;
+      });
+    } else if (e.key === "Enter" && selectedIndex >= 0) {
+      e.preventDefault();
+      flatItems[selectedIndex]?.onClick();
+    }
+  };
+
+  function scrollResultIntoView(index: number) {
+    requestAnimationFrame(() => {
+      const el = resultsRef.current?.querySelector(`[data-result-index="${index}"]`);
+      el?.scrollIntoView({ block: "nearest" });
+    });
+  }
 
   const hasResults = results && (
     results.orders.length + results.quotes.length +
@@ -101,6 +146,34 @@ export default function SearchCommand() {
     );
   }
 
+  let globalIndex = -1;
+
+  const makeResultRow = (
+    key: string,
+    icon: React.ReactNode,
+    title: string,
+    onClick: () => void,
+    subtitle?: string,
+    meta?: string,
+  ) => {
+    globalIndex++;
+    const idx = globalIndex;
+    const isSelected = selectedIndex === idx;
+    return (
+      <ResultRow
+        key={key}
+        index={idx}
+        icon={icon}
+        title={title}
+        subtitle={subtitle}
+        meta={meta}
+        isSelected={isSelected}
+        onClick={onClick}
+        onMouseEnter={() => setSelectedIndex(idx)}
+      />
+    );
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] px-4 bg-black/40 backdrop-blur-sm"
@@ -115,6 +188,7 @@ export default function SearchCommand() {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Search orders, quotes, suppliers, corporates…"
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none"
             data-testid="search-input"
@@ -127,7 +201,7 @@ export default function SearchCommand() {
             </svg>
           )}
           {!loading && query && (
-            <button onClick={() => setQuery("")} className="text-muted-foreground hover:text-foreground flex-shrink-0">
+            <button onClick={() => { setQuery(""); setSelectedIndex(-1); }} className="text-muted-foreground hover:text-foreground flex-shrink-0">
               <X size={14} />
             </button>
           )}
@@ -135,7 +209,7 @@ export default function SearchCommand() {
         </div>
 
         {/* Results */}
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-y-auto flex-1" ref={resultsRef}>
           {!query || query.trim().length < 2 ? (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">
               Type at least 2 characters to search…
@@ -146,86 +220,89 @@ export default function SearchCommand() {
             </div>
           ) : (
             <div className="py-2">
-              {/* Orders */}
               {(results?.orders ?? []).length > 0 && (
                 <Section label="Orders">
-                  {results!.orders.map((o) => (
-                    <ResultRow
-                      key={o.id}
-                      icon={<ShoppingCart size={13} className="text-primary/70" />}
-                      title={o.reference}
-                      subtitle={[o.corporate_name, ORDER_STATUS_LABELS[o.status]].filter(Boolean).join(" · ")}
-                      meta={formatKES(o.total)}
-                      onClick={() => navigate(`/orders/${o.id}`)}
-                    />
-                  ))}
+                  {results!.orders.map((o: any) =>
+                    makeResultRow(
+                      o.id,
+                      <ShoppingCart size={13} className="text-primary/70" />,
+                      o.reference,
+                      () => navigate(`/orders/${o.id}`),
+                      [o.corporate_name, ORDER_STATUS_LABELS[o.status]].filter(Boolean).join(" · "),
+                      formatKES(o.total),
+                    )
+                  )}
                 </Section>
               )}
 
-              {/* Quotes */}
               {(results?.quotes ?? []).length > 0 && (
                 <Section label="Quotes">
-                  {results!.quotes.map((q) => (
-                    <ResultRow
-                      key={q.id}
-                      icon={<FileText size={13} className="text-amber-600/80" />}
-                      title={q.reference ?? q.id.slice(0, 8)}
-                      subtitle={[q.corporate_name, QUOTE_STATUS_LABELS[q.status]].filter(Boolean).join(" · ")}
-                      meta={formatKES(q.total)}
-                      onClick={() => navigate(`/quotes/${q.id}`)}
-                    />
-                  ))}
+                  {results!.quotes.map((q: any) =>
+                    makeResultRow(
+                      q.id,
+                      <FileText size={13} className="text-amber-600/80" />,
+                      q.reference ?? q.id.slice(0, 8),
+                      () => navigate(`/quotes/${q.id}`),
+                      [q.corporate_name, QUOTE_STATUS_LABELS[q.status]].filter(Boolean).join(" · "),
+                      formatKES(q.total),
+                    )
+                  )}
                 </Section>
               )}
 
-              {/* Corporates */}
               {(results?.corporates ?? []).length > 0 && (
                 <Section label="Corporate Accounts">
-                  {results!.corporates.map((c) => (
-                    <ResultRow
-                      key={c.id}
-                      icon={<Building2 size={13} className="text-sage-600/80" />}
-                      title={c.name}
-                      subtitle={[c.industry, c.tier ? c.tier.charAt(0).toUpperCase() + c.tier.slice(1) : null].filter(Boolean).join(" · ")}
-                      onClick={() => navigate(`/corporates/${c.id}`)}
-                    />
-                  ))}
+                  {results!.corporates.map((c: any) =>
+                    makeResultRow(
+                      c.id,
+                      <Building2 size={13} className="text-sage-600/80" />,
+                      c.name,
+                      () => navigate(`/corporates/${c.id}`),
+                      [c.industry, c.tier ? c.tier.charAt(0).toUpperCase() + c.tier.slice(1) : null].filter(Boolean).join(" · "),
+                    )
+                  )}
                 </Section>
               )}
 
-              {/* Suppliers */}
               {(results?.suppliers ?? []).length > 0 && (
                 <Section label="Suppliers">
-                  {results!.suppliers.map((s) => (
-                    <ResultRow
-                      key={s.id}
-                      icon={<Layers size={13} className="text-green-700/70" />}
-                      title={s.name}
-                      subtitle={s.county ?? undefined}
-                      onClick={() => navigate(`/suppliers/${s.id}`)}
-                    />
-                  ))}
+                  {results!.suppliers.map((s: any) =>
+                    makeResultRow(
+                      s.id,
+                      <Layers size={13} className="text-green-700/70" />,
+                      s.name,
+                      () => navigate(`/suppliers/${s.id}`),
+                      s.county ?? undefined,
+                    )
+                  )}
                 </Section>
               )}
 
-              {/* Products */}
               {(results?.products ?? []).length > 0 && (
                 <Section label="Products">
-                  {results!.products.map((p) => (
-                    <ResultRow
-                      key={p.id}
-                      icon={<Package size={13} className="text-muted-foreground" />}
-                      title={p.name}
-                      subtitle={p.origin ?? undefined}
-                      meta={formatKES(p.unitPrice)}
-                      onClick={() => navigate(`/catalogue/${p.id}`)}
-                    />
-                  ))}
+                  {results!.products.map((p: any) =>
+                    makeResultRow(
+                      p.id,
+                      <Package size={13} className="text-muted-foreground" />,
+                      p.name,
+                      () => navigate(`/catalogue/${p.id}`),
+                      p.origin ?? undefined,
+                      formatKES(p.unitPrice),
+                    )
+                  )}
                 </Section>
               )}
             </div>
           )}
         </div>
+
+        {totalItems > 0 && (
+          <div className="px-4 py-2 border-t border-border flex items-center gap-3 text-[10px] text-muted-foreground/50">
+            <span>↑↓ navigate</span>
+            <span>↵ open</span>
+            <span>Esc close</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -241,25 +318,33 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 }
 
 function ResultRow({
-  icon, title, subtitle, meta, onClick,
+  index, icon, title, subtitle, meta, isSelected, onClick, onMouseEnter,
 }: {
+  index: number;
   icon: React.ReactNode;
   title: string;
   subtitle?: string;
   meta?: string;
+  isSelected: boolean;
   onClick: () => void;
+  onMouseEnter: () => void;
 }) {
   return (
     <button
+      data-result-index={index}
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/40 transition-colors text-left group"
+      onMouseEnter={onMouseEnter}
+      className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors text-left group ${
+        isSelected ? "bg-primary/8 border-l-2 border-primary" : "hover:bg-muted/40 border-l-2 border-transparent"
+      }`}
     >
       <span className="flex-shrink-0 w-5 flex items-center justify-center">{icon}</span>
       <span className="flex-1 min-w-0">
-        <span className="block text-sm font-medium text-foreground truncate">{title}</span>
+        <span className={`block text-sm font-medium truncate ${isSelected ? "text-primary" : "text-foreground"}`}>{title}</span>
         {subtitle && <span className="block text-xs text-muted-foreground truncate">{subtitle}</span>}
       </span>
       {meta && <span className="text-xs text-muted-foreground tabular-nums flex-shrink-0">{meta}</span>}
+      {isSelected && <span className="text-[10px] text-primary/60 flex-shrink-0">↵</span>}
     </button>
   );
 }
