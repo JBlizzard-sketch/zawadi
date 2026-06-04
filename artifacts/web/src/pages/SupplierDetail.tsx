@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
-import { ArrowLeft, MapPin, Phone, Mail, CheckCircle2, Package, Leaf, ExternalLink, Pencil, X, Users, Award, ShieldCheck, TreePine } from "lucide-react";
+import { ArrowLeft, MapPin, Phone, Mail, CheckCircle2, Package, Leaf, ExternalLink, Pencil, X, Users, Award, ShieldCheck, TreePine, MessageCircle } from "lucide-react";
 import { useGetSupplier, getGetSupplierQueryKey, useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES } from "@/lib/format";
@@ -152,6 +152,29 @@ export default function SupplierDetail() {
                   >
                     <CheckCircle2 size={12} /> Mark as Verified
                   </button>
+                )}
+                {s.phone && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 bg-white/70 text-green-700 border-green-200 hover:bg-green-50"
+                    onClick={() => {
+                      const phone = s.phone.replace(/\D/g, "");
+                      const msg = [
+                        `*Zawadi — Supplier Enquiry*`,
+                        ``,
+                        `Hello ${s.name},`,
+                        ``,
+                        `We'd like to discuss a corporate gifting order. Could you please confirm your current availability and lead times?`,
+                        ``,
+                        `Thank you.`,
+                      ].join("\n");
+                      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
+                    }}
+                    data-testid="button-whatsapp-supplier"
+                  >
+                    <MessageCircle size={13} /> WhatsApp
+                  </Button>
                 )}
                 <Button size="sm" variant="outline" onClick={openEdit} className="gap-1.5 bg-white/70 hover:bg-white" data-testid="button-edit-supplier">
                   <Pencil size={13} /> Edit
