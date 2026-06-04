@@ -47,6 +47,26 @@ function buildWhatsAppInvoiceMsg(inv: any): string {
   return lines.join("\n");
 }
 
+function buildWhatsAppPaymentReminder(inv: any): string {
+  const daysOverdue = inv.dueDate ? Math.ceil((Date.now() - new Date(inv.dueDate).getTime()) / 86400000) : 0;
+  const lines: string[] = [];
+  lines.push(`*Payment Reminder — ${inv.invoiceNumber}*`);
+  lines.push("");
+  if (inv.corporate_name) lines.push(`Dear ${inv.corporate_name},`);
+  lines.push("");
+  if (daysOverdue > 0) {
+    lines.push(`This is a friendly reminder that invoice *${inv.invoiceNumber}* is now *${daysOverdue} day${daysOverdue !== 1 ? "s" : ""} overdue*.`);
+  } else {
+    lines.push(`This is a friendly reminder that invoice *${inv.invoiceNumber}* is due on ${formatDate(inv.dueDate)}.`);
+  }
+  lines.push(`Amount Outstanding: *KES ${Number(inv.totalAmount).toLocaleString("en-KE")}*`);
+  lines.push("");
+  lines.push("Kindly arrange payment at your earliest convenience and quote the invoice number as your reference.");
+  lines.push("");
+  lines.push("Thank you for your continued business with Zawadi.");
+  return lines.join("\n");
+}
+
 async function updateInvoiceStatus(id: string, status: string) {
   const res = await fetch(`${BASE}/api/invoices/${id}`, {
     method: "PUT",
@@ -426,6 +446,18 @@ export default function InvoiceDetail() {
                 >
                   <MessageCircle size={13} /> WhatsApp
                 </Button>
+
+                {(inv.status === "sent" || inv.status === "overdue") && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsAppPaymentReminder(inv))}`, "_blank")}
+                    className="gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50"
+                    data-testid="button-payment-reminder"
+                  >
+                    <MessageCircle size={13} /> Payment Reminder
+                  </Button>
+                )}
 
                 <Button
                   size="sm"

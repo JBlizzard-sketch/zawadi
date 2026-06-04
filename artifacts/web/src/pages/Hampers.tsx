@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Gift, Trash2, Package, Edit2, FileText, Pencil, Check, X, ChevronRight } from "lucide-react";
+import { Gift, Trash2, Package, Edit2, FileText, Pencil, Check, X, ChevronRight, Download } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,9 +58,36 @@ export default function Hampers() {
             <h1 className="text-2xl font-serif font-semibold text-foreground">Saved Hampers</h1>
             <p className="text-sm text-muted-foreground mt-1">Hamper templates you can reopen and edit in the builder</p>
           </div>
-          <Button size="sm" onClick={() => setLocation("/hamper-builder")} className="gap-1.5" data-testid="button-new-hamper">
-            <Gift size={14} /> New Hamper
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => {
+                if (!hampers?.length) return;
+                const rows = [
+                  ["Name", "Items", "Value (KES)", "Saved"],
+                  ...(hampers as any[]).map((h) => [
+                    h.name ?? "Untitled",
+                    h.itemCount ?? 0,
+                    Number(h.totalPrice ?? 0).toFixed(2),
+                    h.updatedAt ? new Date(h.updatedAt).toLocaleDateString("en-KE") : "",
+                  ]),
+                ];
+                const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+                a.download = "zawadi-saved-hampers.csv";
+                a.click();
+              }}
+              data-testid="button-export-csv"
+            >
+              <Download size={13} /> Export CSV
+            </Button>
+            <Button size="sm" onClick={() => setLocation("/hamper-builder")} className="gap-1.5" data-testid="button-new-hamper">
+              <Gift size={14} /> New Hamper
+            </Button>
+          </div>
         </div>
 
         <div className="bg-card border border-card-border rounded-xl overflow-hidden shadow-sm">
