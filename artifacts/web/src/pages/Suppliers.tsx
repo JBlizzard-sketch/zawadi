@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Layers, Search, CheckCircle2, MapPin, Plus, X, Clock, Eye, CheckCheck, XCircle, Package } from "lucide-react";
+import { Layers, Search, CheckCircle2, MapPin, Plus, X, Clock, Eye, CheckCheck, XCircle, Package, Download } from "lucide-react";
 import { useListSuppliers, getListSuppliersQueryKey } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,20 @@ const ONBOARDING_ACTIVE: Record<string, string> = {
 const ONBOARDING_ICONS: Record<string, React.ElementType> = {
   pending: Clock, in_review: Eye, approved: CheckCheck, rejected: XCircle,
 };
+
+function exportCSV(rows: any[]) {
+  const headers = ["Name", "County", "Email", "Phone", "Onboarding Status", "Verified", "Products", "Tags"];
+  const lines = rows.map((s: any) => [
+    s.name, s.county ?? "", s.email ?? "", s.phone ?? "",
+    s.onboardingStatus ?? "", s.isVerified ? "Yes" : "No",
+    String(s.product_count ?? 0), (s.tags ?? []).join("; "),
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`));
+  const csv = [headers.map((h) => `"${h}"`).join(","), ...lines.map((l) => l.join(","))].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = `zawadi-suppliers-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -108,9 +122,14 @@ export default function Suppliers() {
               {isLoading ? "Loading…" : `${total} supplier${total !== 1 ? "s" : ""} · Kenya's finest artisan producers`}
             </p>
           </div>
-          <Button size="sm" onClick={openModal} className="gap-1.5" data-testid="button-new-supplier">
-            <Plus size={14} /> New Supplier
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => exportCSV(supplierList)} data-testid="button-export-csv">
+              <Download size={13} /> Export CSV
+            </Button>
+            <Button size="sm" onClick={openModal} className="gap-1.5" data-testid="button-new-supplier">
+              <Plus size={14} /> New Supplier
+            </Button>
+          </div>
         </div>
 
         {/* Onboarding Pipeline Summary */}
