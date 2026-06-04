@@ -166,7 +166,13 @@ export default function Invoices() {
                     </td>
                     <td className="px-5 py-3 text-sm text-foreground hidden lg:table-cell">{inv.corporate_name ?? "—"}</td>
                     <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(inv.createdAt)}</td>
-                    <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(inv.dueDate)}</td>
+                    <td className="px-5 py-3 hidden md:table-cell">
+                      <span className="text-xs text-muted-foreground">{formatDate(inv.dueDate)}</span>
+                      {inv.dueDate && inv.status === "sent" && new Date(inv.dueDate) < new Date() && (() => {
+                        const days = Math.ceil((Date.now() - new Date(inv.dueDate).getTime()) / 86400000);
+                        return <span className="ml-2 text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">{days}d overdue</span>;
+                      })()}
+                    </td>
                     <td className="px-5 py-3">
                       <StatusBadge label={INVOICE_STATUS_LABELS[inv.status] ?? inv.status} colorClass={INVOICE_STATUS_COLORS[inv.status] ?? ""} />
                     </td>

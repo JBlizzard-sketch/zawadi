@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Users, AlertCircle, FileText, Check, Building2, Printer, Clock, Pencil, X, ClipboardList, Loader2, MessageCircle } from "lucide-react";
+import { ArrowLeft, Package, Users, AlertCircle, FileText, Check, Building2, Printer, Clock, Pencil, X, ClipboardList, Loader2, MessageCircle, Copy } from "lucide-react";
 import { useGetOrder, getGetOrderQueryKey, useCancelOrder } from "@workspace/api-client-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { formatKES, formatDate, formatDateTime, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/format";
@@ -476,6 +476,37 @@ export default function OrderDetail() {
                 data-testid="button-whatsapp-share"
               >
                 <MessageCircle size={13} /> WhatsApp
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => {
+                  const items = (o.items ?? []).map((item: any) => ({
+                    product_id: item.productId,
+                    quantity: item.quantity,
+                    unit_price: item.unitPrice,
+                    product_name: item.product?.name ?? item.productName ?? "",
+                    line_total: Number(item.unitPrice) * Number(item.quantity),
+                  }));
+                  fetch(`${BASE}/api/orders`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      corporate_id: o.corporateId,
+                      status: "pending",
+                      items,
+                      delivery_address: o.deliveryAddress,
+                      notes: o.notes ? `Copy of ${o.reference} — ${o.notes}` : `Copy of ${o.reference}`,
+                    }),
+                  })
+                    .then((r) => r.json())
+                    .then((newOrder) => { if (newOrder?.id) setLocation(`/orders/${newOrder.id}`); });
+                }}
+                data-testid="button-duplicate-order"
+              >
+                <Copy size={13} /> Duplicate
               </Button>
 
               <Button size="sm" variant="outline" onClick={() => handlePrint("order_confirmation")} className="gap-1.5" data-testid="button-print-order-confirmation">
