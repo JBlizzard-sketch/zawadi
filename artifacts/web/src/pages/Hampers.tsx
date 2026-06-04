@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Gift, ChevronRight, Trash2, Package, Edit2, FileText } from "lucide-react";
+import { Gift, Trash2, Package, Edit2, FileText, Pencil, Check, X } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +13,8 @@ export default function Hampers() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameVal, setRenameVal] = useState("");
 
   const { data: hampers, isLoading } = useQuery<any[]>({
     queryKey: ["hampers"],
@@ -27,6 +29,22 @@ export default function Hampers() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["hampers"] });
       setConfirmDelete(null);
+    },
+  });
+
+  const renameHamper = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const res = await fetch(`${BASE}/api/hampers/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error("Failed to rename");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hampers"] });
+      setRenamingId(null);
     },
   });
 
@@ -80,8 +98,32 @@ export default function Hampers() {
                         <div className="w-8 h-8 bg-gradient-to-br from-amber-100 to-stone-100 rounded-lg flex items-center justify-center flex-shrink-0">
                           <Package size={14} className="text-primary/60" />
                         </div>
-                        <div>
-                          <p className="font-semibold text-foreground">{h.name ?? "Untitled Hamper"}</p>
+                        <div className="flex-1 min-w-0">
+                          {renamingId === h.id ? (
+                            <form
+                              onSubmit={e => { e.preventDefault(); if (renameVal.trim()) renameHamper.mutate({ id: h.id, name: renameVal.trim() }); }}
+                              className="flex items-center gap-1.5"
+                            >
+                              <input
+                                value={renameVal}
+                                onChange={e => setRenameVal(e.target.value)}
+                                className="border border-input rounded px-2 py-0.5 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 min-w-0 flex-1"
+                                autoFocus
+                                onKeyDown={e => e.key === "Escape" && setRenamingId(null)}
+                              />
+                              <button type="submit" disabled={!renameVal.trim() || renameHamper.isPending} className="text-primary hover:text-primary/80"><Check size={14} /></button>
+                              <button type="button" onClick={() => setRenamingId(null)} className="text-muted-foreground hover:text-foreground"><X size={14} /></button>
+                            </form>
+                          ) : (
+                            <div className="flex items-center gap-1.5 group">
+                              <p className="font-semibold text-foreground truncate">{h.name ?? "Untitled Hamper"}</p>
+                              <button
+                                onClick={() => { setRenamingId(h.id); setRenameVal(h.name ?? ""); }}
+                                className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-opacity flex-shrink-0"
+                                data-testid={`button-rename-hamper-${h.id}`}
+                              ><Pencil size={11} /></button>
+                            </div>
+                          )}
                           {h.corporateId && <p className="text-xs text-muted-foreground mt-0.5">Linked to corporate</p>}
                         </div>
                       </div>

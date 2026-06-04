@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, FileText, Send, CheckCircle2, Printer, Building2, ShoppingCart, X, Banknote, CreditCard, Landmark, Smartphone, MessageCircle, Package } from "lucide-react";
+import { ArrowLeft, FileText, Send, CheckCircle2, Printer, Building2, ShoppingCart, X, Banknote, CreditCard, Landmark, Smartphone, MessageCircle, Package, Pencil } from "lucide-react";
 import { useGetInvoice, getGetInvoiceQueryKey } from "@workspace/api-client-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, INVOICE_STATUS_COLORS } from "@/lib/format";
@@ -235,6 +235,22 @@ export default function InvoiceDetail() {
   const [payNotes, setPayNotes] = useState("");
   const [payError, setPayError] = useState("");
 
+  const [editingDueDate, setEditingDueDate] = useState(false);
+  const [dueDateInput, setDueDateInput] = useState("");
+
+  const updateDueDate = useMutation({
+    mutationFn: async (date: string) => {
+      const res = await fetch(`${BASE}/api/invoices/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ due_date: date }),
+      });
+      if (!res.ok) throw new Error("Failed to update due date");
+      return res.json();
+    },
+    onSuccess: () => { invalidate(); setEditingDueDate(false); },
+  });
+
   const openPayModal = () => {
     setPayMethod("mpesa");
     setPayRef("");
@@ -390,6 +406,24 @@ export default function InvoiceDetail() {
             </div>
           </div>
 
+          {/* Aging banner for overdue invoices */}
+          {(inv.status === "overdue" || (inv.status === "sent" && inv.dueDate && new Date(inv.dueDate) < new Date())) && (() => {
+            const days = Math.floor((Date.now() - new Date(inv.dueDate).getTime()) / 86400000);
+            return (
+              <div className="mx-6 mt-5 flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-red-600 text-sm font-bold">!</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-red-700">{days === 0 ? "Due today" : `${days} day${days !== 1 ? "s" : ""} overdue`}</p>
+                  <p className="text-xs text-red-500 mt-0.5">
+                    Due {formatDate(inv.dueDate)} · {formatKES(inv.totalAmount)} outstanding
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Details */}
           <div className="p-6 space-y-6">
             {/* Key info */}
@@ -399,8 +433,31 @@ export default function InvoiceDetail() {
                 <p className="font-medium text-foreground">{formatDate(inv.createdAt)}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Due Date</p>
-                <p className="font-medium text-foreground">{formatDate(inv.dueDate)}</p>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Due Date</p>
+                  {!editingDueDate && (inv.status === "draft" || inv.status === "sent") && (
+                    <button onClick={() => { setDueDateInput(inv.dueDate?.slice(0,10) ?? ""); setEditingDueDate(true); }} className="text-muted-foreground hover:text-foreground">
+                      <Pencil size={10} />
+                    </button>
+                  )}
+                </div>
+                {editingDueDate ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={dueDateInput}
+                      onChange={e => setDueDateInput(e.target.value)}
+                      className="border border-input rounded px-1.5 py-0.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      autoFocus
+                    />
+                    <button onClick={() => updateDueDate.mutate(dueDateInput)} disabled={!dueDateInput || updateDueDate.isPending} className="text-primary font-semibold text-xs hover:underline">Save</button>
+                    <button onClick={() => setEditingDueDate(false)} className="text-muted-foreground text-xs hover:underline">Cancel</button>
+                  </div>
+                ) : (
+                  <p className={`font-medium ${inv.status !== "paid" && inv.dueDate && new Date(inv.dueDate) < new Date() ? "text-red-600" : "text-foreground"}`}>
+                    {formatDate(inv.dueDate)}
+                  </p>
+                )}
               </div>
               {inv.kraPin && (
                 <div>
