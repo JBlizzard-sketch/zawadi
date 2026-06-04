@@ -38,6 +38,7 @@ export default function Corporates() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [tier, setTier] = useState("");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
 
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
@@ -46,7 +47,10 @@ export default function Corporates() {
 
   const params = { search: search || undefined, tier: tier || undefined };
   const { data: corporates, isLoading } = useListCorporates(params, { query: { queryKey: getListCorporatesQueryKey(params) } });
-  const corpList = (corporates as any[]) ?? [];
+  const corpList = [...((corporates as any[]) ?? [])].sort((a: any, b: any) => {
+    const av = Number(a.totalSpend ?? 0), bv = Number(b.totalSpend ?? 0);
+    return sortDir === "desc" ? bv - av : av - bv;
+  });
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -94,6 +98,10 @@ export default function Corporates() {
             <p className="text-sm text-muted-foreground mt-1">{corpList.length} active client{corpList.length !== 1 ? "s" : ""}</p>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
+              <button onClick={() => setSortDir("desc")} className={`px-3 py-1.5 transition-colors ${sortDir === "desc" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}>Spend ↓</button>
+              <button onClick={() => setSortDir("asc")} className={`px-3 py-1.5 border-l border-border transition-colors ${sortDir === "asc" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}>Spend ↑</button>
+            </div>
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => exportCSV(corpList)} data-testid="button-export-csv">
               <Download size={13} /> Export CSV
             </Button>

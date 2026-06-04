@@ -64,8 +64,13 @@ const EMPTY = { name: "", occasion: "client_gifts", description: "", coverImageU
 
 export default function Collections() {
   const queryClient = useQueryClient();
-  const { data: collections, isLoading } = useListCollections({}, { query: { queryKey: getListCollectionsQueryKey({}) } });
-
+  const [sortBy, setSortBy] = useState<"name" | "products" | "featured">("featured");
+  const { data: rawCollections, isLoading } = useListCollections({}, { query: { queryKey: getListCollectionsQueryKey({}) } });
+  const collections = [...((rawCollections as any[]) ?? [])].sort((a: any, b: any) => {
+    if (sortBy === "products") return (b.productCount ?? 0) - (a.productCount ?? 0);
+    if (sortBy === "featured") return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
+    return (a.name ?? "").localeCompare(b.name ?? "");
+  });
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -134,6 +139,11 @@ export default function Collections() {
             <p className="text-sm text-muted-foreground mt-1">Curated sets for every corporate occasion</p>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
+              <button onClick={() => setSortBy("featured")} className={`px-3 py-1.5 transition-colors ${sortBy === "featured" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}>Featured</button>
+              <button onClick={() => setSortBy("products")} className={`px-3 py-1.5 border-l border-border transition-colors ${sortBy === "products" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}>Most Items</button>
+              <button onClick={() => setSortBy("name")} className={`px-3 py-1.5 border-l border-border transition-colors ${sortBy === "name" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}>A–Z</button>
+            </div>
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => exportCSV((collections as any[]) ?? [])} data-testid="button-export-csv">
               <Download size={13} /> Export CSV
             </Button>
