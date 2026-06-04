@@ -53,6 +53,7 @@ export default function PurchaseOrders() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [offset, setOffset] = useState(0);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const LIMIT = 20;
 
   const [showModal, setShowModal] = useState(false);
@@ -75,7 +76,11 @@ export default function PurchaseOrders() {
     staleTime: 30_000,
   });
 
-  const poList = posData?.items ?? [];
+  const rawPos = posData?.items ?? [];
+  const poList = [...rawPos].sort((a: any, b: any) => {
+    const av = Number(a.totalAmount ?? 0), bv = Number(b.totalAmount ?? 0);
+    return sortDir === "desc" ? bv - av : av - bv;
+  });
   const total: number = posData?.total ?? 0;
   const totalPages = Math.ceil(total / LIMIT);
   const currentPage = Math.floor(offset / LIMIT) + 1;
@@ -203,7 +208,11 @@ export default function PurchaseOrders() {
                 <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Reference</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Supplier</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  <button onClick={() => setSortDir(d => d === "desc" ? "asc" : "desc")} className="inline-flex items-center gap-1 hover:text-foreground transition-colors" data-testid="button-sort-total">
+                    Total {sortDir === "desc" ? "↓" : "↑"}
+                  </button>
+                </th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Expected</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Created</th>
                 <th />

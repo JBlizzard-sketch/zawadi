@@ -55,6 +55,7 @@ export default function Suppliers() {
   const [county, setCounty] = useState("");
   const [onboardingStatus, setOnboardingStatus] = useState("");
   const [offset, setOffset] = useState(0);
+  const [sortBy, setSortBy] = useState<"name" | "products">("name");
   const LIMIT = 24;
 
   const { data: pipeline } = useQuery<Record<string, number>>({
@@ -70,7 +71,12 @@ export default function Suppliers() {
 
   const params = { search: search || undefined, county: county || undefined, onboarding_status: onboardingStatus || undefined, limit: LIMIT, offset } as any;
   const { data: suppliers, isLoading } = useListSuppliers(params, { query: { queryKey: getListSuppliersQueryKey(params) } });
-  const supplierList = (suppliers as any)?.items ?? [];
+  const rawSuppliers = (suppliers as any)?.items ?? [];
+  const supplierList = [...rawSuppliers].sort((a: any, b: any) =>
+    sortBy === "products"
+      ? (b.product_count ?? 0) - (a.product_count ?? 0)
+      : (a.name ?? "").localeCompare(b.name ?? "")
+  );
   const total: number = (suppliers as any)?.total ?? 0;
   const totalPages = Math.ceil(total / LIMIT);
   const currentPage = Math.floor(offset / LIMIT) + 1;
@@ -123,6 +129,10 @@ export default function Suppliers() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
+              <button onClick={() => setSortBy("name")} className={`px-3 py-1.5 transition-colors ${sortBy === "name" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`} data-testid="sort-name">A–Z</button>
+              <button onClick={() => setSortBy("products")} className={`px-3 py-1.5 border-l border-border transition-colors ${sortBy === "products" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`} data-testid="sort-products">Most Products</button>
+            </div>
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => exportCSV(supplierList)} data-testid="button-export-csv">
               <Download size={13} /> Export CSV
             </Button>
