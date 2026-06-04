@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Gift, Trash2, Package, Edit2, FileText, Pencil, Check, X } from "lucide-react";
+import { Gift, Trash2, Package, Edit2, FileText, Pencil, Check, X, ChevronRight } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, SlidersHorizontal, Package, Star, Plus, X, FileText, Trash2 } from "lucide-react";
+import { Search, SlidersHorizontal, Package, Star, Plus, X, FileText, Trash2, Download } from "lucide-react";
 import {
   useListProducts, getListProductsQueryKey,
   useListCategories, getListCategoriesQueryKey,
@@ -80,6 +80,33 @@ export default function Catalogue() {
 
   const openModal = () => { setForm({ ...EMPTY_PRODUCT }); setTiers([]); setError(""); setShowModal(true); };
 
+  const handleExportCSV = () => {
+    if (!products.length) return;
+    const header = "Name,SKU,Category,Supplier,Unit Price (KES),MOQ,Stock Qty,Lead Time (Days),Origin,Status";
+    const rows = products.map((p: any) =>
+      [
+        p.name,
+        p.sku ?? "",
+        p.category?.name ?? "",
+        p.supplier?.name ?? "",
+        p.unitPrice,
+        p.moq ?? "",
+        p.stockQty ?? "",
+        p.leadTimeDays ?? "",
+        p.origin ?? "",
+        p.isActive ? "Active" : "Inactive",
+      ]
+        .map((v: any) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `zawadi-catalogue-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   const handleSubmit = async () => {
     if (!form.name.trim()) { setError("Product name is required."); return; }
     if (!form.supplierId) { setError("Please select a supplier."); return; }
@@ -131,9 +158,16 @@ export default function Catalogue() {
             <h1 className="text-2xl font-serif font-semibold text-foreground">Product Catalogue</h1>
             <p className="text-sm text-muted-foreground mt-1">Curated Kenyan artisan products for corporate gifting</p>
           </div>
-          <Button size="sm" onClick={openModal} className="gap-1.5" data-testid="button-new-product">
-            <Plus size={14} /> New Product
-          </Button>
+          <div className="flex gap-2">
+            {products.length > 0 && (
+              <Button size="sm" variant="outline" onClick={handleExportCSV} className="gap-1.5" data-testid="button-export-catalogue">
+                <Download size={14} /> Export CSV
+              </Button>
+            )}
+            <Button size="sm" onClick={openModal} className="gap-1.5" data-testid="button-new-product">
+              <Plus size={14} /> New Product
+            </Button>
+          </div>
         </div>
 
         <div className="bg-card border border-card-border rounded-xl p-4 mb-6 flex flex-wrap gap-3 items-center shadow-sm">

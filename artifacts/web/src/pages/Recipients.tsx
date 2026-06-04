@@ -71,6 +71,22 @@ export default function Recipients() {
     onError: (e: any) => setAddError(e.message ?? "Something went wrong."),
   });
 
+  function exportRecipients() {
+    if (!recipientList.length) return;
+    const header = "Name,Email,Title,Department";
+    const rows = recipientList.map((r: any) =>
+      [r.name, r.email ?? "", r.title ?? "", r.department ?? ""]
+        .map((v: string) => `"${v.replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `recipients-order-${orderId?.slice(0, 8)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -135,9 +151,16 @@ export default function Recipients() {
             <h1 className="text-2xl font-serif font-semibold text-foreground">Recipient Management</h1>
             <p className="text-sm text-muted-foreground mt-1">{recipientList.length} recipient{recipientList.length !== 1 ? "s" : ""} for this order</p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => setShowAddForm(v => !v)} className="gap-1.5" data-testid="button-add-recipient">
-            <UserPlus size={14} /> Add One
-          </Button>
+          <div className="flex gap-2">
+            {recipientList.length > 0 && (
+              <Button size="sm" variant="outline" onClick={exportRecipients} className="gap-1.5" data-testid="button-export-recipients">
+                <FileDown size={14} /> Export CSV
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => setShowAddForm(v => !v)} className="gap-1.5" data-testid="button-add-recipient">
+              <UserPlus size={14} /> Add One
+            </Button>
+          </div>
         </div>
 
         {/* Single add form */}

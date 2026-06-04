@@ -632,7 +632,7 @@ export default function Reports() {
                         <div className="flex items-center gap-1.5">
                           <span className="font-medium text-foreground">{s.supplier_name}</span>
                           {s.is_verified && (
-                            <ShieldCheck size={11} className="text-green-600 flex-shrink-0" title="Verified" />
+                            <ShieldCheck size={11} className="text-green-600 flex-shrink-0" aria-label="Verified" />
                           )}
                         </div>
                       </td>
