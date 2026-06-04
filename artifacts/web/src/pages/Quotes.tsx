@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { FileText, ChevronRight, Plus, Trash2, X, ChevronDown, Package, Search } from "lucide-react";
+import { FileText, ChevronRight, Plus, Trash2, X, ChevronDown, Package, Search, Download } from "lucide-react";
 import {
   useListQuotes, getListQuotesQueryKey,
   useListCorporates, getListCorporatesQueryKey,
@@ -43,6 +43,25 @@ function getEffectivePrice(
     if (qty >= tier.min_qty) return tier.price_per_unit;
   }
   return basePrice;
+}
+
+function exportCSV(rows: any[]) {
+  const headers = ["Reference", "Client", "Status", "Subtotal (KES)", "VAT (KES)", "Total (KES)", "Valid Until", "Created"];
+  const lines = rows.map((q: any) => [
+    q.reference ?? q.id.slice(0, 8).toUpperCase(),
+    q.corporateName ?? "",
+    q.status,
+    Number(q.subtotal ?? 0).toFixed(2),
+    Number(q.vat ?? 0).toFixed(2),
+    Number(q.total ?? 0).toFixed(2),
+    q.validUntil ? new Date(q.validUntil).toISOString().slice(0, 10) : "",
+    q.createdAt ? new Date(q.createdAt).toISOString().slice(0, 10) : "",
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`));
+  const csv = [headers.map((h) => `"${h}"`).join(","), ...lines.map((l) => l.join(","))].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = `zawadi-quotes-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
 }
 
 export default function Quotes() {
@@ -263,6 +282,9 @@ export default function Quotes() {
                 ))}
               </SelectContent>
             </Select>
+            <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => exportCSV(quoteList)} data-testid="button-export-csv">
+              <Download size={13} /> Export CSV
+            </Button>
             <Button size="sm" className="gap-2 h-9" onClick={openModal} data-testid="button-new-quote">
               <Plus size={14} /> New Quote
             </Button>

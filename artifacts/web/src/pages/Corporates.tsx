@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Building2, Search, ChevronRight, Plus, X } from "lucide-react";
+import { Building2, Search, ChevronRight, Plus, X, Download } from "lucide-react";
 import { useListCorporates, getListCorporatesQueryKey } from "@workspace/api-client-react";
 import { formatKES, TIER_COLORS } from "@/lib/format";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,19 @@ const PAYMENT_TERM_LABELS: Record<string, string> = { net_7: "Net 7", net_14: "N
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const EMPTY = { name: "", email: "", phone: "", industry: "", tier: "standard", kraPin: "", city: "", paymentTerms: "net_30", accountManagerName: "" };
+
+function exportCSV(rows: any[]) {
+  const headers = ["Name", "Industry", "City", "Tier", "Email", "Phone", "KRA PIN", "Payment Terms", "Account Manager"];
+  const lines = rows.map((c: any) => [
+    c.name, c.industry ?? "", c.city ?? "", c.tier ?? "", c.email ?? "", c.phone ?? "",
+    c.kraPin ?? "", c.paymentTerms ?? "", c.accountManagerName ?? "",
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`));
+  const csv = [headers.map((h) => `"${h}"`).join(","), ...lines.map((l) => l.join(","))].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = `zawadi-corporates-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
 
 export default function Corporates() {
   const [, setLocation] = useLocation();
@@ -80,9 +93,14 @@ export default function Corporates() {
             <h1 className="text-2xl font-serif font-semibold text-foreground">Corporate Accounts</h1>
             <p className="text-sm text-muted-foreground mt-1">{corpList.length} active client{corpList.length !== 1 ? "s" : ""}</p>
           </div>
-          <Button size="sm" onClick={openModal} className="gap-1.5" data-testid="button-new-corporate">
-            <Plus size={14} /> New Client
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => exportCSV(corpList)} data-testid="button-export-csv">
+              <Download size={13} /> Export CSV
+            </Button>
+            <Button size="sm" onClick={openModal} className="gap-1.5" data-testid="button-new-corporate">
+              <Plus size={14} /> New Client
+            </Button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-3 mb-6 items-center">
