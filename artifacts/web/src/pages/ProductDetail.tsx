@@ -44,6 +44,16 @@ export default function ProductDetail() {
   const { data: categories } = useListCategories({ query: { queryKey: getListCategoriesQueryKey(), enabled: showEdit } });
   const { data: suppliersData } = useListSuppliers(undefined, { query: { queryKey: getListSuppliersQueryKey(), enabled: showEdit } });
 
+  // Track recently viewed in localStorage
+  if (id && (product as any)?.id) {
+    try {
+      const KEY = "zawadi_recently_viewed";
+      const prev: string[] = JSON.parse(localStorage.getItem(KEY) ?? "[]");
+      const next = [id, ...prev.filter((x) => x !== id)].slice(0, 10);
+      localStorage.setItem(KEY, JSON.stringify(next));
+    } catch {}
+  }
+
   const categoryList = (categories as any[]) ?? [];
   const supplierList = (suppliersData as any[]) ?? [];
 

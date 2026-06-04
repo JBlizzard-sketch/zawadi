@@ -43,6 +43,13 @@ export default function Catalogue() {
   const [offset, setOffset] = useState(0);
   const limit = 12;
 
+  const [sortBy, setSortBy] = useState<"default" | "price_asc" | "price_desc">("default");
+
+  // Recently viewed — read from localStorage (set by ProductDetail on visit)
+  const recentIds: string[] = (() => {
+    try { return JSON.parse(localStorage.getItem("zawadi_recently_viewed") ?? "[]"); } catch { return []; }
+  })();
+
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_PRODUCT });
   const [tiers, setTiers] = useState<Array<{ min_qty: string; price_per_unit: string }>>([]);
@@ -69,7 +76,12 @@ export default function Catalogue() {
   const { data: categories } = useListCategories({ query: { queryKey: getListCategoriesQueryKey() } });
   const { data: suppliersData } = useListSuppliers(undefined, { query: { queryKey: getListSuppliersQueryKey() } });
 
-  const products = (productsData as any)?.items ?? [];
+  const rawProducts = (productsData as any)?.items ?? [];
+  const products = [...rawProducts].sort((a: any, b: any) => {
+    if (sortBy === "price_asc") return Number(a.unitPrice ?? 0) - Number(b.unitPrice ?? 0);
+    if (sortBy === "price_desc") return Number(b.unitPrice ?? 0) - Number(a.unitPrice ?? 0);
+    return 0;
+  });
   const total = (productsData as any)?.total ?? 0;
   const totalPages = Math.ceil(total / limit);
   const currentPage = Math.floor(offset / limit) + 1;
@@ -158,7 +170,12 @@ export default function Catalogue() {
             <h1 className="text-2xl font-serif font-semibold text-foreground">Product Catalogue</h1>
             <p className="text-sm text-muted-foreground mt-1">Curated Kenyan artisan products for corporate gifting</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
+              <button onClick={() => setSortBy("default")} className={`px-3 py-1.5 transition-colors ${sortBy === "default" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}>Default</button>
+              <button onClick={() => setSortBy("price_asc")} className={`px-3 py-1.5 border-l border-border transition-colors ${sortBy === "price_asc" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}>Price ↑</button>
+              <button onClick={() => setSortBy("price_desc")} className={`px-3 py-1.5 border-l border-border transition-colors ${sortBy === "price_desc" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}>Price ↓</button>
+            </div>
             {products.length > 0 && (
               <Button size="sm" variant="outline" onClick={handleExportCSV} className="gap-1.5" data-testid="button-export-catalogue">
                 <Download size={14} /> Export CSV
@@ -235,6 +252,30 @@ export default function Catalogue() {
             )}
           </div>
         </div>
+
+        {/* Recently Viewed strip */}
+        {recentIds.length > 0 && !search && !categoryId && !supplierId && !occasion && !lowStock && (
+          <div className="mb-5 bg-card border border-card-border rounded-xl p-4 shadow-sm">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Recently Viewed</p>
+            <div className="flex gap-2 flex-wrap">
+              {recentIds.slice(0, 6).map((rid) => {
+                const p = rawProducts.find((x: any) => x.id === rid);
+                if (!p) return null;
+                return (
+                  <Link key={rid} href={`/catalogue/${rid}`} className="flex items-center gap-2 bg-muted hover:bg-muted/80 transition-colors rounded-lg px-3 py-2 text-sm text-foreground border border-border">
+                    {p.images?.[0]?.url ? (
+                      <img src={p.images[0].url} alt={p.name} className="w-7 h-7 rounded object-cover flex-shrink-0" />
+                    ) : (
+                      <Package size={14} className="text-muted-foreground flex-shrink-0" />
+                    )}
+                    <span className="font-medium truncate max-w-[120px]">{p.name}</span>
+                    <span className="text-muted-foreground text-xs whitespace-nowrap">{formatKES(p.unitPrice)}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
