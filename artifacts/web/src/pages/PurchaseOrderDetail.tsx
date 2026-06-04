@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "wouter";
-import { ArrowLeft, ClipboardList, CheckCircle2, Send, Package, X, AlertTriangle, Printer, Pencil, Mail } from "lucide-react";
+import { ArrowLeft, ClipboardList, CheckCircle2, Send, Package, X, AlertTriangle, Printer, Pencil, Mail, MessageCircle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -406,6 +406,33 @@ export default function PurchaseOrderDetail() {
                 <Link href={`/suppliers/${po.supplier.id}`} className="text-xs text-primary hover:underline">
                   View supplier →
                 </Link>
+                {po.supplier.phone && (
+                  <button
+                    onClick={() => {
+                      const items: any[] = po.items ?? [];
+                      const msg = [
+                        `*Purchase Order ${po.reference}*`,
+                        "",
+                        `Dear ${po.supplier.name} team,`,
+                        "Please find our purchase order for:",
+                        "",
+                        ...items.map((item: any) => `  • ${item.quantity}x ${item.productName} @ KES ${Number(item.unitCost).toLocaleString("en-KE")}`),
+                        "",
+                        `*Total: KES ${Number(po.totalAmount ?? 0).toLocaleString("en-KE")}*`,
+                        po.expectedDate ? `Expected: ${new Date(po.expectedDate).toLocaleDateString("en-KE", { year: "numeric", month: "long", day: "numeric" })}` : "",
+                        "",
+                        "Please confirm at your earliest convenience.",
+                        "— Zawadi Corporate Gifting",
+                      ].filter(Boolean).join("\n");
+                      const phone = po.supplier.phone.replace(/[^0-9+]/g, "");
+                      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
+                    }}
+                    className="text-xs text-green-700 border border-green-200 bg-green-50 hover:bg-green-100 rounded-md px-2.5 py-1 transition-colors flex items-center gap-1.5"
+                    data-testid="button-whatsapp-supplier"
+                  >
+                    <MessageCircle size={11} /> WhatsApp supplier
+                  </button>
+                )}
                 {po.supplier.email && (
                   <button
                     onClick={() => {

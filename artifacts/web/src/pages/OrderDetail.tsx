@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Users, AlertCircle, FileText, Check, Building2, Printer, Clock, Pencil, X, ClipboardList, Loader2 } from "lucide-react";
+import { ArrowLeft, Package, Users, AlertCircle, FileText, Check, Building2, Printer, Clock, Pencil, X, ClipboardList, Loader2, MessageCircle } from "lucide-react";
 import { useGetOrder, getGetOrderQueryKey, useCancelOrder } from "@workspace/api-client-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { formatKES, formatDate, formatDateTime, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/format";
@@ -366,6 +366,25 @@ export default function OrderDetail() {
 
   const o = order as any;
 
+  function buildWhatsAppOrderMsg(order: any): string {
+    const lines = [
+      `*Order Confirmation — ${order.reference}*`,
+      "",
+      `Client: ${order.corporate_name ?? "—"}`,
+      `Status: ${ORDER_STATUS_LABELS[order.status] ?? order.status}`,
+      "",
+      "*Items:*",
+      ...(order.items ?? []).map((item: any) =>
+        `  • ${item.quantity}x ${item.product?.name ?? item.productName ?? "Product"} — ${formatKES(Number(item.unitPrice ?? 0) * Number(item.quantity ?? 1))}`
+      ),
+      "",
+      `*Total: ${formatKES(Number(order.totalAmount ?? 0))}*`,
+      order.deliveryDate ? `Delivery: ${formatDate(order.deliveryDate)}` : "",
+      order.deliveryAddress ? `Address: ${order.deliveryAddress}` : "",
+    ].filter(Boolean);
+    return lines.join("\n");
+  }
+
   const handleCancel = () => {
     if (!window.confirm("Cancel this order? This cannot be undone.")) return;
     cancelOrder.mutate({ id }, { onSuccess: invalidate });
@@ -448,6 +467,16 @@ export default function OrderDetail() {
                   <ClipboardList size={13} /> Raise PO
                 </Button>
               )}
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-green-700 border-green-200 hover:bg-green-50"
+                onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsAppOrderMsg(o))}`, "_blank")}
+                data-testid="button-whatsapp-share"
+              >
+                <MessageCircle size={13} /> WhatsApp
+              </Button>
 
               <Button size="sm" variant="outline" onClick={() => handlePrint("order_confirmation")} className="gap-1.5" data-testid="button-print-order-confirmation">
                 <FileText size={13} /> Order Confirmation
