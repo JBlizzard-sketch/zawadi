@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, Send, XCircle, Printer, Building2, Copy, Truck, X, MessageCircle, Tag, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Send, XCircle, Printer, Building2, Copy, Truck, X, MessageCircle, Tag, Check, Pencil } from "lucide-react";
 import { useGetQuote, getGetQuoteQueryKey, useConvertQuoteToOrder } from "@workspace/api-client-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, QUOTE_STATUS_COLORS } from "@/lib/format";
@@ -191,6 +191,22 @@ export default function QuoteDetail() {
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [discountInput, setDiscountInput] = useState("");
 
+  const [editingValidUntil, setEditingValidUntil] = useState(false);
+  const [validUntilInput, setValidUntilInput] = useState("");
+
+  const updateValidUntil = useMutation({
+    mutationFn: async (date: string) => {
+      const res = await fetch(`${BASE}/api/quotes/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ valid_until: date }),
+      });
+      if (!res.ok) throw new Error("Failed to update valid until");
+      return res.json();
+    },
+    onSuccess: () => { invalidate(); setEditingValidUntil(false); },
+  });
+
   const applyDiscount = useMutation({
     mutationFn: async (pct: number) => {
       const res = await fetch(`${BASE}/api/quotes/${id}`, {
@@ -328,12 +344,30 @@ export default function QuoteDetail() {
                   <p className="text-sm text-muted-foreground">{q.corporate_name}</p>
                 </div>
               )}
-              <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                 <span>Created {formatDate(q.createdAt)}</span>
                 <span>·</span>
-                <span className={new Date(q.validUntil) < new Date() ? "text-destructive font-medium" : ""}>
-                  Valid until {formatDate(q.validUntil)}
-                </span>
+                {editingValidUntil ? (
+                  <span className="flex items-center gap-1.5">
+                    <span>Valid until</span>
+                    <input
+                      type="date"
+                      value={validUntilInput}
+                      onChange={e => setValidUntilInput(e.target.value)}
+                      className="border border-input rounded px-1.5 py-0.5 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      autoFocus
+                    />
+                    <button onClick={() => updateValidUntil.mutate(validUntilInput)} disabled={!validUntilInput || updateValidUntil.isPending} className="text-primary font-semibold hover:underline">Save</button>
+                    <button onClick={() => setEditingValidUntil(false)} className="text-muted-foreground hover:underline">Cancel</button>
+                  </span>
+                ) : (
+                  <span className={`flex items-center gap-1 ${new Date(q.validUntil) < new Date() ? "text-destructive font-medium" : ""}`}>
+                    Valid until {formatDate(q.validUntil)}
+                    {(q.status === "draft" || q.status === "sent") && (
+                      <button onClick={() => { setValidUntilInput(q.validUntil?.slice(0,10) ?? ""); setEditingValidUntil(true); }} className="text-muted-foreground hover:text-foreground ml-0.5"><Pencil size={10} /></button>
+                    )}
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">

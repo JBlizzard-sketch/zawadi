@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "wouter";
-import { ArrowLeft, ClipboardList, CheckCircle2, Send, Package, X, AlertTriangle, Printer, Pencil } from "lucide-react";
+import { ArrowLeft, ClipboardList, CheckCircle2, Send, Package, X, AlertTriangle, Printer, Pencil, Mail } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -395,16 +395,50 @@ export default function PurchaseOrderDetail() {
         {po.supplier && (
           <div className="bg-card border border-card-border rounded-xl p-5 shadow-sm">
             <h2 className="text-sm font-semibold text-foreground mb-3">Supplier</h2>
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium text-foreground">{po.supplier.name}</p>
                 <p className="text-xs text-muted-foreground">{po.supplier.county}</p>
                 {po.supplier.email && <p className="text-xs text-muted-foreground">{po.supplier.email}</p>}
                 {po.supplier.phone && <p className="text-xs text-muted-foreground">{po.supplier.phone}</p>}
               </div>
-              <Link href={`/suppliers/${po.supplier.id}`} className="text-xs text-primary hover:underline">
-                View supplier →
-              </Link>
+              <div className="flex flex-col items-end gap-2">
+                <Link href={`/suppliers/${po.supplier.id}`} className="text-xs text-primary hover:underline">
+                  View supplier →
+                </Link>
+                {po.supplier.email && (
+                  <button
+                    onClick={() => {
+                      const lines = [
+                        `Subject: Purchase Order ${po.reference} — ${po.supplier.name}`,
+                        "",
+                        `Dear ${po.supplier.name} team,`,
+                        "",
+                        `Please find our purchase order ${po.reference} for the following items:`,
+                        "",
+                        ...items.map((item: any) => `  • ${item.quantity}x ${item.productName} @ KES ${Number(item.unitCost).toLocaleString("en-KE")} each`),
+                        "",
+                        `Total: KES ${Number(totalAmount).toLocaleString("en-KE")}`,
+                        po.expectedDate ? `Expected delivery: ${new Date(po.expectedDate).toLocaleDateString("en-KE", { year: "numeric", month: "long", day: "numeric" })}` : "",
+                        po.notes ? `\nNotes: ${po.notes}` : "",
+                        "",
+                        "Please confirm receipt of this order at your earliest convenience.",
+                        "",
+                        "Kind regards,",
+                        "Zawadi Corporate Gifting",
+                      ].filter(l => l !== undefined);
+                      navigator.clipboard.writeText(lines.join("\n")).then(() => {
+                        const btn = document.getElementById("po-email-btn");
+                        if (btn) { btn.textContent = "✓ Copied!"; setTimeout(() => { btn.textContent = "Copy supplier email"; }, 2000); }
+                      });
+                    }}
+                    id="po-email-btn"
+                    className="text-xs text-muted-foreground border border-border rounded-md px-2.5 py-1 hover:bg-muted hover:text-foreground transition-colors flex items-center gap-1.5"
+                  >
+                    <Mail size={11} /> Copy supplier email
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

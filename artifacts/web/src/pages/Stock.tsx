@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Warehouse, Search, Plus, Minus, ClipboardList, AlertTriangle, PackageX, CheckCircle2, ChevronRight } from "lucide-react";
+import { Warehouse, Search, Plus, Minus, ClipboardList, AlertTriangle, PackageX, CheckCircle2, ChevronRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -104,13 +104,38 @@ export default function Stock() {
               <p className="text-xs text-muted-foreground mt-0.5">Track inventory levels and adjust stock counts</p>
             </div>
           </div>
-          <Link
-            href="/purchase-orders"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-foreground text-xs font-semibold hover:bg-muted transition-colors"
-            data-testid="link-purchase-orders"
-          >
-            <ClipboardList size={13} /> Purchase Orders
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const rows = filtered.map((p: any) => [
+                  p.name ?? "",
+                  p.supplier?.name ?? "",
+                  p.category?.name ?? "",
+                  p.stockQty ?? 0,
+                  p.moq ?? 1,
+                  p.unitPrice ?? 0,
+                ]);
+                const header = ["Product", "Supplier", "Category", "Stock Qty", "MOQ", "Unit Price (KES)"];
+                const csv = [header, ...rows].map(r => r.map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+                const blob = new Blob([csv], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url; a.download = `zawadi-stock-${new Date().toISOString().slice(0,10)}.csv`;
+                a.click(); URL.revokeObjectURL(url);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-foreground text-xs font-semibold hover:bg-muted transition-colors"
+              data-testid="btn-export-csv"
+            >
+              <Download size={13} /> Export CSV
+            </button>
+            <Link
+              href="/purchase-orders"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-foreground text-xs font-semibold hover:bg-muted transition-colors"
+              data-testid="link-purchase-orders"
+            >
+              <ClipboardList size={13} /> Purchase Orders
+            </Link>
+          </div>
         </div>
 
         {/* Summary cards */}
