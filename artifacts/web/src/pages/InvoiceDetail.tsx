@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, FileText, Send, CheckCircle2, Printer, Building2, ShoppingCart, X, Banknote, CreditCard, Landmark, Smartphone, MessageCircle, Package, Pencil } from "lucide-react";
+import { ArrowLeft, FileText, Send, CheckCircle2, Printer, Building2, ShoppingCart, X, Banknote, CreditCard, Landmark, Smartphone, MessageCircle, Package, Pencil, Mail } from "lucide-react";
 import { useGetInvoice, getGetInvoiceQueryKey } from "@workspace/api-client-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatKES, formatDate, INVOICE_STATUS_COLORS } from "@/lib/format";
@@ -445,6 +445,20 @@ export default function InvoiceDetail() {
                   data-testid="button-whatsapp-share"
                 >
                   <MessageCircle size={13} /> WhatsApp
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const subject = encodeURIComponent(`Invoice ${inv.invoiceNumber ?? ""} — Zawadi Corporate Gifting`);
+                    const body = encodeURIComponent(buildWhatsAppInvoiceMsg(inv));
+                    window.open(`mailto:?subject=${subject}&body=${body}`, "_self");
+                  }}
+                  className="gap-1.5"
+                  data-testid="button-email-invoice"
+                >
+                  <Mail size={13} /> Email
                 </Button>
 
                 {(inv.status === "sent" || inv.status === "overdue") && (

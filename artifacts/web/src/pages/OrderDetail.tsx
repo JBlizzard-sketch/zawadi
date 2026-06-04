@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Users, AlertCircle, FileText, Check, Building2, Printer, Clock, Pencil, X, ClipboardList, Loader2, MessageCircle, Copy } from "lucide-react";
+import { ArrowLeft, Package, Users, AlertCircle, FileText, Check, Building2, Printer, Clock, Pencil, X, ClipboardList, Loader2, MessageCircle, Copy, Mail } from "lucide-react";
 import { useGetOrder, getGetOrderQueryKey, useCancelOrder } from "@workspace/api-client-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { formatKES, formatDate, formatDateTime, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/format";
@@ -476,6 +476,20 @@ export default function OrderDetail() {
                 data-testid="button-whatsapp-share"
               >
                 <MessageCircle size={13} /> WhatsApp
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => {
+                  const subject = encodeURIComponent(`Order ${o.reference ?? ""} — Zawadi Corporate Gifting`);
+                  const body = encodeURIComponent(buildWhatsAppOrderMsg(o));
+                  window.open(`mailto:?subject=${subject}&body=${body}`, "_self");
+                }}
+                data-testid="button-email-order"
+              >
+                <Mail size={13} /> Email
               </Button>
 
               <Button
