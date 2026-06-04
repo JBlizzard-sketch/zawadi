@@ -44,6 +44,19 @@ export default function Catalogue() {
   const limit = 12;
 
   const [sortBy, setSortBy] = useState<"default" | "price_asc" | "price_desc">("default");
+  const [showFavourites, setShowFavourites] = useState(false);
+  const [favourites, setFavourites] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("zawadi_favourites") ?? "[]"); } catch { return []; }
+  });
+
+  const toggleFavourite = (pid: string, e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    setFavourites((prev) => {
+      const next = prev.includes(pid) ? prev.filter((x) => x !== pid) : [pid, ...prev];
+      try { localStorage.setItem("zawadi_favourites", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
 
   // Recently viewed — read from localStorage (set by ProductDetail on visit)
   const recentIds: string[] = (() => {
@@ -77,11 +90,13 @@ export default function Catalogue() {
   const { data: suppliersData } = useListSuppliers(undefined, { query: { queryKey: getListSuppliersQueryKey() } });
 
   const rawProducts = (productsData as any)?.items ?? [];
-  const products = [...rawProducts].sort((a: any, b: any) => {
-    if (sortBy === "price_asc") return Number(a.unitPrice ?? 0) - Number(b.unitPrice ?? 0);
-    if (sortBy === "price_desc") return Number(b.unitPrice ?? 0) - Number(a.unitPrice ?? 0);
-    return 0;
-  });
+  const products = [...rawProducts]
+    .filter((p: any) => !showFavourites || favourites.includes(p.id))
+    .sort((a: any, b: any) => {
+      if (sortBy === "price_asc") return Number(a.unitPrice ?? 0) - Number(b.unitPrice ?? 0);
+      if (sortBy === "price_desc") return Number(b.unitPrice ?? 0) - Number(a.unitPrice ?? 0);
+      return 0;
+    });
   const total = (productsData as any)?.total ?? 0;
   const totalPages = Math.ceil(total / limit);
   const currentPage = Math.floor(offset / limit) + 1;
@@ -234,6 +249,13 @@ export default function Catalogue() {
           </Select>
           <div className="flex gap-2 ml-auto items-center flex-wrap">
             <button
+              onClick={() => { setShowFavourites((v) => !v); setOffset(0); }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${showFavourites ? "bg-yellow-50 border-yellow-300 text-yellow-800" : "bg-card border-border text-muted-foreground hover:bg-muted"}`}
+              data-testid="filter-favourites"
+            >
+              ★ Favourites{favourites.length > 0 && ` (${favourites.length})`}
+            </button>
+            <button
               onClick={() => { setLowStock((v) => !v); setOffset(0); }}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${lowStock ? "bg-amber-100 border-amber-300 text-amber-800" : "bg-card border-border text-muted-foreground hover:bg-muted"}`}
               data-testid="filter-low-stock"
@@ -301,6 +323,15 @@ export default function Catalogue() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {products.map((product: any) => (
               <div key={product.id} className="relative bg-card border border-card-border rounded-xl overflow-hidden hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 group" data-testid={`card-product-${product.id}`}>
+                {/* Favourite star button */}
+                <button
+                  onClick={(e) => toggleFavourite(product.id, e)}
+                  className="absolute top-2 left-2 z-10 w-6 h-6 flex items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+                  data-testid={`btn-favourite-${product.id}`}
+                  title={favourites.includes(product.id) ? "Remove from favourites" : "Add to favourites"}
+                >
+                  <Star size={12} fill={favourites.includes(product.id) ? "#f59e0b" : "none"} stroke={favourites.includes(product.id) ? "#f59e0b" : "#6b7280"} />
+                </button>
                 <Link href={`/catalogue/${product.id}`} className="block">
                   <div className="h-44 bg-gradient-to-br from-amber-50 to-stone-100 flex items-center justify-center relative overflow-hidden">
                     {product.images?.[0]?.url ? (

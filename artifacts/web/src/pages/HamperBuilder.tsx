@@ -53,6 +53,7 @@ export default function HamperBuilder() {
   const [loadedHamperId, setLoadedHamperId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+  const [draftRestored, setDraftRestored] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
   const [corporateId, setCorporateId] = useState("");
@@ -107,7 +108,35 @@ export default function HamperBuilder() {
     if (add || products || name) {
       window.history.replaceState({}, "", window.location.pathname);
     }
+
+    // Restore draft from localStorage (only when no URL params are driving the load)
+    if (!hamperId && !add && !products) {
+      try {
+        const saved = localStorage.getItem("zawadi_hamper_draft");
+        if (saved) {
+          const draft = JSON.parse(saved);
+          if (draft.hamper?.length) {
+            setHamper(draft.hamper);
+            setRecipients(draft.recipients ?? 1);
+            setHamperName(draft.hamperName ?? "My Zawadi Hamper");
+            setDraftRestored(true);
+          }
+        }
+      } catch {}
+    }
   }, []);
+
+  // Autosave draft to localStorage whenever items change
+  useEffect(() => {
+    if (loadedHamperId) return; // don't overwrite draft when working on a saved hamper
+    try {
+      if (hamper.length > 0) {
+        localStorage.setItem("zawadi_hamper_draft", JSON.stringify({ hamper, recipients, hamperName }));
+      } else {
+        localStorage.removeItem("zawadi_hamper_draft");
+      }
+    } catch {}
+  }, [hamper, recipients, hamperName, loadedHamperId]);
 
   const handleSaveHamper = async () => {
     if (hamper.length === 0) return;
@@ -266,6 +295,19 @@ export default function HamperBuilder() {
   return (
     <Layout>
       <div className="p-8 max-w-7xl mx-auto">
+        {/* Draft restored banner */}
+        {draftRestored && (
+          <div className="mb-4 flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800" data-testid="banner-draft-restored">
+            <span>📋 Draft restored — your previous hamper session was loaded automatically.</span>
+            <button
+              onClick={() => { setHamper([]); setRecipients(1); setHamperName("My Zawadi Hamper"); setDraftRestored(false); localStorage.removeItem("zawadi_hamper_draft"); }}
+              className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
+            >
+              Clear draft
+            </button>
+          </div>
+        )}
+
         <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-serif font-semibold text-foreground">Hamper Builder</h1>
