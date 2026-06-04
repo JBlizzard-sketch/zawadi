@@ -39,6 +39,7 @@ export default function Invoices() {
   const [search, setSearch] = useState("");
   const [corporateId, setCorporateId] = useState("");
   const [offset, setOffset] = useState(0);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const params = { status: status || undefined, search: search || undefined, corporate_id: corporateId || undefined, limit: LIMIT, offset };
   const { data: invoicesData, isLoading } = useListInvoices(params as any, { query: { queryKey: getListInvoicesQueryKey(params as any) } });
@@ -46,7 +47,11 @@ export default function Invoices() {
   const { data: corporates } = useListCorporates(undefined, { query: { queryKey: getListCorporatesQueryKey() } });
   const corporateList = (corporates as any[]) ?? [];
 
-  const invoiceList = (invoicesData as any)?.items ?? [];
+  const rawInvoices = (invoicesData as any)?.items ?? [];
+  const invoiceList = [...rawInvoices].sort((a: any, b: any) => {
+    const av = Number(a.totalAmount ?? 0), bv = Number(b.totalAmount ?? 0);
+    return sortDir === "desc" ? bv - av : av - bv;
+  });
   const total: number = (invoicesData as any)?.total ?? 0;
   const totalPages = Math.ceil(total / LIMIT);
   const currentPage = Math.floor(offset / LIMIT) + 1;
@@ -123,7 +128,11 @@ export default function Invoices() {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Issued</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Due Date</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  <button onClick={() => setSortDir(d => d === "desc" ? "asc" : "desc")} className="inline-flex items-center gap-1 hover:text-foreground transition-colors" data-testid="button-sort-total">
+                    Total {sortDir === "desc" ? "↓" : "↑"}
+                  </button>
+                </th>
                 <th className="px-5 py-3 w-8"></th>
               </tr>
             </thead>

@@ -70,6 +70,7 @@ export default function Orders() {
   const [search, setSearch] = useState("");
   const [corporateId, setCorporateId] = useState("");
   const [offset, setOffset] = useState(0);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const limit = 20;
 
   const [showModal, setShowModal] = useState(false);
@@ -83,7 +84,11 @@ export default function Orders() {
   const params = { status: status || undefined, search: search || undefined, corporate_id: corporateId || undefined, limit, offset };
   const { data: ordersData, isLoading } = useListOrders(params as any, { query: { queryKey: getListOrdersQueryKey(params as any) } });
 
-  const orders = (ordersData as any)?.items ?? [];
+  const rawOrders = (ordersData as any)?.items ?? [];
+  const orders = [...rawOrders].sort((a: any, b: any) => {
+    const av = Number(a.totalAmount ?? 0), bv = Number(b.totalAmount ?? 0);
+    return sortDir === "desc" ? bv - av : av - bv;
+  });
   const total = (ordersData as any)?.total ?? 0;
   const totalPages = Math.ceil(total / limit);
   const currentPage = Math.floor(offset / limit) + 1;
@@ -245,7 +250,11 @@ export default function Orders() {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Date</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Recipients</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  <button onClick={() => setSortDir(d => d === "desc" ? "asc" : "desc")} className="inline-flex items-center gap-1 hover:text-foreground transition-colors" data-testid="button-sort-total">
+                    Total {sortDir === "desc" ? "↓" : "↑"}
+                  </button>
+                </th>
                 <th className="px-5 py-3 w-8"></th>
               </tr>
             </thead>
