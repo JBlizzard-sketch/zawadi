@@ -5,6 +5,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SearchCommand from "@/components/ui/SearchCommand";
+import { useQuery } from "@tanstack/react-query";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const NAV = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -26,6 +29,34 @@ const NAV = [
 
 export default function Sidebar() {
   const [location] = useLocation();
+
+  const { data: alerts } = useQuery<any>({
+    queryKey: ["dashboard-alerts"],
+    queryFn: () => fetch(`${BASE}/api/dashboard/alerts`).then((r) => r.json()),
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });
+
+  const { data: pendingPOs } = useQuery<any>({
+    queryKey: ["po-badge"],
+    queryFn: () => fetch(`${BASE}/api/purchase-orders?status=sent&limit=1`).then((r) => r.json()),
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });
+
+  const badges: Record<string, { count: number; color: string }> = {};
+
+  if (alerts?.overdue_invoices?.count > 0)
+    badges["/invoices"] = { count: alerts.overdue_invoices.count, color: "bg-red-500" };
+
+  if (alerts?.expiring_quotes?.count > 0)
+    badges["/quotes"] = { count: alerts.expiring_quotes.count, color: "bg-orange-500" };
+
+  if (alerts?.low_stock_products?.count > 0)
+    badges["/stock"] = { count: alerts.low_stock_products.count, color: "bg-amber-500" };
+
+  if ((pendingPOs?.total ?? 0) > 0)
+    badges["/purchase-orders"] = { count: pendingPOs.total, color: "bg-blue-500" };
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 w-60 bg-sidebar flex flex-col">
@@ -51,6 +82,7 @@ export default function Sidebar() {
       <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-0.5" data-testid="sidebar-nav">
         {NAV.map(({ label, href, icon: Icon }) => {
           const active = href === "/" ? location === "/" : location.startsWith(href);
+          const badge = badges[href];
           return (
             <Link
               key={href}
@@ -65,6 +97,11 @@ export default function Sidebar() {
             >
               <Icon size={15} className="flex-shrink-0" />
               <span className="flex-1">{label}</span>
+              {badge && !active && (
+                <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white ${badge.color}`}>
+                  {badge.count > 99 ? "99+" : badge.count}
+                </span>
+              )}
               {active && <ChevronRight size={12} className="opacity-60" />}
             </Link>
           );

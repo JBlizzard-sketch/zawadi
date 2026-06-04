@@ -38,11 +38,106 @@ const TRANSITIONS: Record<string, { label: string; nextStatus: string; icon: Rea
   cancelled: [],
 };
 
+function PrintablePurchaseOrder({ po }: { po: any }) {
+  const items: any[] = po.items ?? [];
+  const total = parseFloat(po.totalAmount ?? "0");
+  return (
+    <div className="hidden print:block font-sans text-[13px] text-gray-900 max-w-2xl mx-auto p-8">
+      <div className="flex justify-between items-start mb-8 border-b-2 border-gray-900 pb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">ZAWADI</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Corporate Gifting Platform · Nairobi, Kenya</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xl font-bold">PURCHASE ORDER</p>
+          <p className="font-mono text-base font-semibold mt-1 text-gray-800">{po.reference}</p>
+          <p className="text-xs text-gray-500 mt-1">Date: {formatDate(po.createdAt)}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-8 mb-8">
+        <div>
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-2">Supplier</p>
+          <p className="font-bold text-gray-900 text-base">{po.supplier?.name ?? "—"}</p>
+          {po.supplier?.county && <p className="text-sm text-gray-600">{po.supplier.county}, Kenya</p>}
+          {po.supplier?.email && <p className="text-sm text-gray-600">{po.supplier.email}</p>}
+          {po.supplier?.phone && <p className="text-sm text-gray-600">{po.supplier.phone}</p>}
+        </div>
+        <div>
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-2">PO Details</p>
+          <table className="text-sm w-full">
+            <tbody>
+              <tr><td className="text-gray-500 pr-3 py-0.5">PO Number</td><td className="font-mono font-semibold">{po.reference}</td></tr>
+              <tr><td className="text-gray-500 pr-3 py-0.5">Issue Date</td><td>{formatDate(po.createdAt)}</td></tr>
+              {po.expectedDate && <tr><td className="text-gray-500 pr-3 py-0.5">Expected By</td><td className="font-semibold text-gray-900">{formatDate(po.expectedDate)}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Product / Description</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-16">Qty</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Unit Cost (KES)</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Line Total (KES)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item: any) => (
+              <tr key={item.id} className="border-t border-gray-100">
+                <td className="px-4 py-3 font-medium">{item.productName}</td>
+                <td className="px-4 py-3 text-right">{item.quantity}</td>
+                <td className="px-4 py-3 text-right text-gray-600">{parseFloat(item.unitCost).toLocaleString("en-KE", { minimumFractionDigits: 2 })}</td>
+                <td className="px-4 py-3 text-right font-medium">{parseFloat(item.lineTotal).toLocaleString("en-KE", { minimumFractionDigits: 2 })}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-gray-800 bg-gray-50">
+              <td colSpan={3} className="px-4 py-3 text-right font-bold">Total Payable (KES)</td>
+              <td className="px-4 py-3 text-right font-bold text-lg">{total.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {po.notes && (
+        <div className="bg-amber-50 border border-amber-200 rounded px-4 py-3 mb-6">
+          <p className="font-semibold text-amber-800 mb-1 text-xs uppercase tracking-wide">Notes / Special Instructions</p>
+          <p className="text-sm text-gray-700">{po.notes}</p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-12 mt-10">
+        <div><div className="border-t border-gray-400 pt-2">
+          <p className="text-xs text-gray-500">Authorised by — Zawadi Corporate Gifting</p>
+          <p className="text-xs text-gray-400 mt-1">Name / Title / Date</p>
+        </div></div>
+        <div><div className="border-t border-gray-400 pt-2">
+          <p className="text-xs text-gray-500">Accepted by — {po.supplier?.name ?? "Supplier"}</p>
+          <p className="text-xs text-gray-400 mt-1">Name / Title / Date</p>
+        </div></div>
+      </div>
+
+      <p className="text-[10px] text-gray-400 text-center mt-8 border-t border-gray-100 pt-4">
+        This purchase order is subject to Zawadi standard terms and conditions. · Zawadi Corporate Gifting Platform · Nairobi, Kenya
+      </p>
+    </div>
+  );
+}
+
 export default function PurchaseOrderDetail() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [confirmReceive, setConfirmReceive] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesVal, setNotesVal] = useState("");
+  const [editingDate, setEditingDate] = useState(false);
+  const [dateVal, setDateVal] = useState("");
 
   const { data: po, isLoading } = useQuery<any>({
     queryKey: ["purchase-order", id],
@@ -68,6 +163,19 @@ export default function PurchaseOrderDetail() {
       setConfirmReceive(false);
       setPendingStatus(null);
     },
+  });
+
+  const updateMeta = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const res = await fetch(`${BASE}/api/purchase-orders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["purchase-order", id] }),
   });
 
   const handleTransition = (nextStatus: string) => {
@@ -110,7 +218,10 @@ export default function PurchaseOrderDetail() {
 
   return (
     <Layout>
-      <div className="p-8 max-w-3xl mx-auto">
+      {/* Printable PO — hidden on screen, visible in print */}
+      <PrintablePurchaseOrder po={po} />
+
+      <div className="p-8 max-w-3xl mx-auto print:hidden">
         {/* Back */}
         <Link href="/purchase-orders" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
           <ArrowLeft size={14} /> Purchase Orders
@@ -130,9 +241,14 @@ export default function PurchaseOrderDetail() {
               )}
             </div>
             <div className="flex flex-col items-end gap-3">
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${PO_STATUS_COLORS[po.status] ?? "bg-muted text-muted-foreground border-border"}`}>
-                {PO_STATUS_LABELS[po.status] ?? po.status}
-              </span>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => window.print()} data-testid="button-print-po">
+                  <Printer size={13} /> Print PO
+                </Button>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${PO_STATUS_COLORS[po.status] ?? "bg-muted text-muted-foreground border-border"}`}>
+                  {PO_STATUS_LABELS[po.status] ?? po.status}
+                </span>
+              </div>
               <p className="text-xl font-bold tabular-nums text-foreground">{formatKES(totalAmount)}</p>
             </div>
           </div>
@@ -143,12 +259,23 @@ export default function PurchaseOrderDetail() {
               <p className="text-xs text-muted-foreground mb-0.5">Created</p>
               <p className="text-sm font-medium">{formatDate(po.createdAt)}</p>
             </div>
-            {po.expectedDate && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Expected</p>
-                <p className="text-sm font-medium">{formatDate(po.expectedDate)}</p>
+            <div>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <p className="text-xs text-muted-foreground">Expected Delivery</p>
+                {!editingDate && po.status !== "received" && po.status !== "cancelled" && (
+                  <button onClick={() => { setDateVal(po.expectedDate ? po.expectedDate.slice(0,10) : ""); setEditingDate(true); }} className="text-muted-foreground hover:text-foreground"><Pencil size={11} /></button>
+                )}
               </div>
-            )}
+              {editingDate ? (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Input type="date" value={dateVal} onChange={(e) => setDateVal(e.target.value)} className="h-7 text-xs w-36" />
+                  <button onClick={() => { updateMeta.mutate({ expectedDate: dateVal || null }); setEditingDate(false); }} className="text-xs text-primary font-semibold hover:underline">Save</button>
+                  <button onClick={() => setEditingDate(false)} className="text-xs text-muted-foreground hover:underline">Cancel</button>
+                </div>
+              ) : (
+                <p className="text-sm font-medium">{po.expectedDate ? formatDate(po.expectedDate) : <span className="text-muted-foreground italic text-xs">Not set</span>}</p>
+              )}
+            </div>
             {po.receivedDate && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">Received</p>
@@ -157,12 +284,34 @@ export default function PurchaseOrderDetail() {
             )}
           </div>
 
-          {po.notes && (
-            <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Notes</p>
-              <p className="text-sm text-foreground">{po.notes}</p>
+          {/* Notes inline edit */}
+          <div className="mt-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes</p>
+              {!editingNotes && po.status !== "received" && po.status !== "cancelled" && (
+                <button onClick={() => { setNotesVal(po.notes ?? ""); setEditingNotes(true); }} className="text-muted-foreground hover:text-foreground"><Pencil size={11} /></button>
+              )}
             </div>
-          )}
+            {editingNotes ? (
+              <div className="space-y-2">
+                <textarea
+                  value={notesVal}
+                  onChange={(e) => setNotesVal(e.target.value)}
+                  rows={3}
+                  className="w-full text-sm px-3 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                  placeholder="Add notes for this supplier…"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={() => { updateMeta.mutate({ notes: notesVal.trim() || null }); setEditingNotes(false); }} disabled={updateMeta.isPending}>Save</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingNotes(false)}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              po.notes
+                ? <p className="text-sm text-foreground bg-muted/50 rounded-lg px-3 py-2">{po.notes}</p>
+                : <p className="text-xs text-muted-foreground italic">No notes — click ✎ to add</p>
+            )}
+          </div>
 
           {/* Action buttons */}
           {transitions.length > 0 && (

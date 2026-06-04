@@ -322,7 +322,17 @@ export default function Quotes() {
                       <p className="text-xs text-muted-foreground mt-0.5">{quote.corporate_name ?? "—"}</p>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(quote.createdAt)}</td>
-                    <td className="px-5 py-3 text-muted-foreground text-xs hidden md:table-cell">{formatDate(quote.validUntil)}</td>
+                    <td className="px-5 py-3 hidden md:table-cell">
+                      {quote.validUntil ? (() => {
+                        const days = Math.ceil((new Date(quote.validUntil).getTime() - Date.now()) / 86400000);
+                        const isActiveSent = quote.status === "sent";
+                        if (isActiveSent && days < 0)
+                          return <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">Expired {Math.abs(days)}d ago</span>;
+                        if (isActiveSent && days <= 7)
+                          return <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-700 bg-orange-50 border border-orange-200 rounded-full px-2 py-0.5">Expires in {days}d</span>;
+                        return <span className="text-xs text-muted-foreground">{formatDate(quote.validUntil)}</span>;
+                      })() : <span className="text-xs text-muted-foreground">—</span>}
+                    </td>
                     <td className="px-5 py-3">
                       <StatusBadge label={QUOTE_STATUS_LABELS[quote.status] ?? quote.status} colorClass={QUOTE_STATUS_COLORS[quote.status] ?? ""} />
                     </td>
